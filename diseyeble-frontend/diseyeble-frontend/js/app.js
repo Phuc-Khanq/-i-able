@@ -914,7 +914,7 @@
   const label = el => (el.getAttribute('aria-label') || el.querySelector('b')?.textContent || el.textContent || '').replace(/\s+/g,' ').trim().slice(0,32) || el.dataset.act;
 
   /* natural blinks on the simulated face */
-  (function natural(){ setTimeout(()=>{ if (!$('#demo').hidden && !FACE.active && !G.scripted) gesture('natural'); natural(); }, 3500+Math.random()*3500); })();
+  (function natural(){ setTimeout(()=>{ if (!$('#demo').hidden && !FACE.active && !G.scripted && !(window.DZ && window.DZ.engineLive)) gesture('natural'); natural(); }, 3500+Math.random()*3500); })();
 
   /* keyboard shortcuts */
   let vHeld = false;
@@ -1298,7 +1298,7 @@
   let SIGNAL = {ear:.3,brow:.03,mouth:.03,pitch:0,yaw:0,roll:0};
   const HIST = [], EVENTS = [], WINDOW_MS = 6000;
   function sample(now, s){ HIST.push({t:now, ...s}); while (HIST.length && now-HIST[0].t > WINDOW_MS+200) HIST.shift(); }
-  function addEvent(t, kind, text){ EVENTS.push({t, kind, text}); while (EVENTS.length && t-EVENTS[0].t > WINDOW_MS+200) EVENTS.shift(); }
+  function addEvent(t, kind, text, label){ EVENTS.push({t, kind, text, label}); while (EVENTS.length && t-EVENTS[0].t > WINDOW_MS+200) EVENTS.shift(); }
   const plot = $('#plot'), pctx = plot.getContext('2d');
   let PC = null, pcT = 0;
   function plotColors(now){
@@ -1341,7 +1341,7 @@
       pctx.strokeStyle = col; pctx.lineWidth = 2; pctx.setLineDash(ev.kind==='natural'?[4,5]:[]);
       pctx.beginPath(); pctx.moveTo(x, top); pctx.lineTo(x, H-axisH); pctx.stroke(); pctx.setLineDash([]);
       const lane = {brow:0, natural:0, mouth:1, nod:2, shake:3, tiltL:2, tiltR:2}[ev.kind];
-      const label = {natural:'blink ignored', brow:'CLICK', mouth:'R-CLICK', nod:'YES', shake:'NO', tiltL:'SCROLL ↑', tiltR:'SCROLL ↓'}[ev.kind];
+      const label = ev.label || {natural:'blink ignored', brow:'CLICK', mouth:'R-CLICK', nod:'YES', shake:'NO', tiltL:'SCROLL ↑', tiltR:'SCROLL ↓'}[ev.kind];
       pctx.font = '700 15px "JetBrains Mono", monospace';
       const tw = pctx.measureText(label).width + 12, lx = Math.min(x+4, Wd-Rp-tw), ly = top + lane*lh + 6;
       pctx.fillStyle = col; pctx.fillRect(lx, ly, tw, 22);
@@ -1395,6 +1395,10 @@
     }
     requestAnimationFrame(loop);
   }
+
+  /* ---------------- hooks for js/engine.js (the real engine over WebSocket) ---------------- */
+  window.DZ = { $, esc, log, toast, tip, flashSig, glabel, mascotDo, setCaption, addEvent, FACE, DUR, G, screen, mic,
+    get micLive(){ return micLive; }, set micLive(v){ micLive = v; mic.classList.toggle('live', v); } };
 
   /* ---------------- boot ---------------- */
   renderAll(); renderChips();
