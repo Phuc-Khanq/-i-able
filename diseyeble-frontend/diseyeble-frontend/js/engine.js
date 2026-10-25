@@ -120,7 +120,7 @@
     pill.classList.toggle('off', !on);
     $('#engTxt').textContent = on ? 'Engine live' : (starting ? 'Starting engine…' : 'Simulated');
     screenEl.classList.toggle('dz-live', on);
-    $('#accTxt').textContent = on ? 'head' : 'eyes';
+    $('#accTxt').textContent = on ? 'head' : 'simulated';
     if (on) {
       saved = { dwell: G.dwell, paused: G.paused };
       G.dwell = false;   // the engine decides about dwell clicks
@@ -371,7 +371,7 @@
   }
   function applySys() {
     dim.style.opacity = ((100 - SYS.bright) / 100 * 0.75).toFixed(3);   // 10% brightness = 68% black over the screen
-    const tv = $('#trayVol'); if (tv) tv.textContent = SYS.muted || !SYS.vol ? '🔇' : (SYS.vol < 34 ? '🔈' : SYS.vol < 67 ? '🔉' : '🔊');
+    const tv = $('#trayVol'); if (tv) tv.style.opacity = SYS.muted || !SYS.vol ? .3 : (SYS.vol < 34 ? .55 : SYS.vol < 67 ? .8 : 1);   // the tray volume glyph fades with the level
   }
   function actSystem(name) {
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
