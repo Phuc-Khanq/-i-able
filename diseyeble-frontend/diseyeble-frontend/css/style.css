@@ -354,7 +354,7 @@ input[type=range]{width:100%;accent-color:var(--iris)}
 
 .monitor-scroll{overflow-x:auto;border-radius:18px}
 .monitor{background:#1C1C1C;border-radius:18px;padding:10px 10px 20px;position:relative;min-width:760px}
-.monitor::after{content:"diseyeble · simulated Windows desktop";position:absolute;bottom:3px;left:0;right:0;text-align:center;font-family:var(--f-mono);font-size:10px;color:#9A9B7A;letter-spacing:.1em}
+.monitor::after{content:"eyeable · simulated Windows desktop";position:absolute;bottom:3px;left:0;right:0;text-align:center;font-family:var(--f-mono);font-size:10px;color:#9A9B7A;letter-spacing:.1em}
 
 /* ---- simulated Windows world (fixed light palette, independent of page theme) ---- */
 .screen{position:relative;height:660px;border-radius:8px;overflow:hidden;font-family:var(--f-win);color:#1B1B1F;cursor:crosshair;user-select:none;
@@ -835,7 +835,7 @@ main#intro,main#demo{position:relative}
 #pg-controls{overflow-x:clip}
 .ctl-ghost{position:fixed;z-index:5;pointer-events:none;border-radius:var(--r);border:1px solid rgba(255,255,255,.7);background:linear-gradient(90deg,rgba(143,227,106,.18),rgba(255,255,255,.06));box-shadow:0 0 18px rgba(143,227,106,.35),inset 0 0 20px rgba(255,255,255,.08)}
 
-/* ===== Live demo, engine connected: camera-only rail, the Diseyeble card on the simulated screen ===== */
+/* ===== Live demo, engine connected: camera-only rail, the EYEable card on the simulated screen ===== */
 .cam img#camLive{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .cam.live{aspect-ratio:16/9}
 .cam.live canvas{display:none}
