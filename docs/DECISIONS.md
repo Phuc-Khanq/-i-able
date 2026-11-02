@@ -1,0 +1,45 @@
+# Decisions
+
+One entry per decision, newest at the bottom. Never edit an old entry: add a new one that says what it replaces.
+
+Format: date, decision, why, evidence, who decided.
+
+---
+
+**2026-11-02. Only commercially usable licences.**
+[eye]able will be sold, so every model, dataset and package must allow commercial use (Apache 2.0, MIT, BSD, CC BY or similar). Check the licence on the source's own page before adding anything.
+Decided by: Khang.
+
+**2026-11-02. Drop Qwen2.5-3B for the dictation clean-up; don't fine-tune it.**
+Its licence is `qwen-research`, and fine-tuned copies keep that licence.
+Evidence: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct (licence field). Decided by: Khang.
+
+**2026-11-02. The clean-up uses the Qwen3.5 family.**
+Test Qwen3.5-4B first, with thinking off. Qwen3.5-9B is a stretch goal. For weaker laptops try Qwen3.5-2B, then 0.8B, then Qwen3-1.7B. Stay inside the Qwen family so prompts, code and training stay consistent.
+Why: Apache 2.0, one family with sizes from 0.8B to 9B, strongest small models in the comparison we made.
+Evidence: model cards list Apache 2.0 for Qwen3.5-2B, 4B and 9B, and Qwen3-1.7B (huggingface.co/Qwen). A third-party test reports about 1.3 GB (2B) and 2.7 GB (4B) for 4-bit files, and 18 and 8.5 tokens/s on a 16-core server CPU (bkataru.github.io/igllama/showcase/qwen35-small). Not yet measured by us.
+Decided by: Khang.
+
+**2026-11-02. Rejected alternatives for the clean-up.**
+Llama 3.2 3B: custom licence with naming and attribution rules. Phi-4-mini (MIT) and Gemma 4 (Apache 2.0 on its model cards): good, but no reason to leave the Qwen family. SmolLM3-3B: weaker on our comparison. Decided by: Khang.
+
+**2026-11-02. Measure before training.**
+Build the 100-case test set first, run prompt-only baselines, and fine-tune only the gap that shows. A third of the cases are held out and never used for tuning.
+Evidence: `eval/dictation_cleanup/README.md`. Decided by: Khang.
+
+**2026-11-02. Head-tracking training data: numbers only, five targets.**
+Record tracker numbers over time, never video. Learn direction intent, gesture vs not, voluntary vs involuntary motion, personal sensitivity and gaze. Main concerns: direction intent and voluntary vs involuntary motion. Detailed design waits for Khoi's tracker research.
+Decided by: Khang.
+
+**2026-11-02. Claude Code for code, Cowork for coordination.**
+Code, tests, evaluation runs and training happen in Claude Code on Khang's PC. Research, planning, docs and the weekly tracker happen in Cowork. `docs/STATUS.md` and this file connect the two.
+Decided by: Khang.
+
+---
+
+## Proposed, not yet agreed
+
+- Clean-up levels the user chooses: Exact (as said), Tidy (fix grammar), Full help (work out what was meant).
+- The clean-up gets Whisper's top candidates, the last text typed, the app and the user's word list as input.
+- The guard changes from "reject if the text differs a lot" to "reject if it adds facts nobody said".
+- Tiers: light model by default on weak laptops, heavier model where the GPU allows.

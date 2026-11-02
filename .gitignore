@@ -44,3 +44,12 @@ ui/dist/
 
 # Scratch output from Claude sessions
 Claude outputs/
+
+*.mov
+Quiz_*.pdf
+Pages.pdf
+eyeable-logo-pack.zip
+
+# Claude Code: personal instructions and settings stay on this PC
+CLAUDE.local.md
+.claude/settings.local.json
