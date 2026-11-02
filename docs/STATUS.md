@@ -1,14 +1,15 @@
 # Status
 
-Last updated: 2026-11-02 (first Claude Code session)
+Last updated: 2026-11-02 18:15 (first Claude Code session, via /wrap-up). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
-- **Dictation clean-up model switch.** Replace Qwen2.5-3B (research licence) with the Qwen3.5 family. First job: a script that runs a model over `eval/dictation_cleanup/testset.csv` and scores it, then a prompt-only baseline with Qwen3.5-4B (thinking off) next to the current Qwen2.5-3B clean-up.
+- **Dictation clean-up model switch.** Replace Qwen2.5-3B (research licence) with the Qwen3.5 family. First job: the scoring runner over `eval/dictation_cleanup/testset.csv`, then a prompt-only baseline with Qwen3.5-4B (thinking off) next to the current Qwen2.5-3B clean-up.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
 ## Done recently
 
+- 2026-11-02: `/wrap-up` command (`.claude/skills/wrap-up/`) and `docs/SESSION_LOG.md`. Commits carry only the developer's name (CLAUDE.md, Git workflow).
 - 2026-11-02: moved to the private repo `Phuc-Khanq/-i-able` (remote `origin`): all 9 local branches and 5 tags pushed. The old public repo is now remote `public`. See DECISIONS.md.
 - 2026-11-02: setup files and test set committed on branch `voice-cleanup-eval` (from `main`). Local `voice` was 59 commits behind `main`, so it was left as it was.
 - 2026-11-02: `eval/dictation_cleanup/` created: 100 original test cases (30 mispronounced, 30 broken structure, 10 mixed, 15 ambiguous, 15 clean controls; 33 held out) and a README with the scoring rules. Drafted by Claude, not yet reviewed by Khang or Khoi.
@@ -25,15 +26,15 @@ Last updated: 2026-11-02 (first Claude Code session)
 
 ## In progress
 
-- Plan for the scoring runner (waiting for Khang's OK).
+- Scoring runner (`eval/dictation_cleanup/`): spec agreed (DECISIONS.md, 2026-11-02), build started, no code yet.
 
 ## Next
 
-1. Review the test set (Khang and Khoi): fix any case that doesn't sound like a real user or has the wrong intended meaning.
-2. Build the scoring runner (`eval/dictation_cleanup/`): load a model by name from config, run every case, save outputs, score the automatic checks (must-keep items, unchanged controls), produce a sheet for the human checks (meaning kept, nothing invented).
-3. Baseline: Qwen3.5-4B with thinking off vs the current Qwen2.5-3B clean-up, on dev cases. Measure latency p50/p90/p99.
-4. Same set with Qwen3.5-2B and 0.8B.
-5. Time the light sizes on a low-end laptop (8 GB RAM, no NVIDIA GPU) with the whole pipeline running.
+1. Build the scoring runner, tests first (`tests/test_cleanup_eval.py`), then the full test suite and compile check.
+2. Run the "current" clean-up (Qwen2.5-3B) on dev.
+3. Qwen3.5-4B with the plain and full prompts on dev (download needs Khang's OK). Latency p50/p90/p99, tokens, peak GPU memory.
+4. Review the test set (Khang and Khoi): fix any case that doesn't sound like a real user or has the wrong intended meaning.
+5. Same set with Qwen3.5-2B and 0.8B; then time the light sizes on a low-end laptop (8 GB RAM, no NVIDIA GPU).
 6. Licence scan of all Python packages.
 
 ## Blockers and risks

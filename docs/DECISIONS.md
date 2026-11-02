@@ -40,6 +40,28 @@ Two of the original five left and the product is going a different way, so new w
 Known limits: the code already public stays usable by anyone under its MIT licence; going private only protects new work. The licence for new code and IP agreements with past and current contributors are still open (a lawyer's question).
 Decided by: Khang.
 
+**2026-11-02. Commits carry only the developer's name.**
+No `Co-Authored-By` lines and no Claude or "Generated with" attribution in commits or pull requests. Khang wants every commit under his own name. Two commits pushed before this rule (0a26717, 0116961) keep the line, since pushed history isn't rewritten. Recorded in CLAUDE.md, Git workflow.
+Decided by: Khang.
+
+**2026-11-02. The clean-up evaluation works on branch `voice-cleanup-eval`.**
+`origin/voice` no longer existed and local `voice` was 59 commits behind `main`, so the branch was made fresh from `main`. Local `voice` was left at fd85b60 (already in `main`).
+Decided by: Khang.
+
+**2026-11-02. Small findings from the first code review.**
+- The exact-version rule in CLAUDE.md applies to new packages only. Existing lines in `requirements.txt` (e.g. `transformers>=4.57`) stay as they are.
+- `eval/dictation_cleanup/testset.csv` starts with a BOM on purpose, so Excel opens it correctly. Code reads it with `encoding="utf-8-sig"`.
+- The docstring and fallback default in `engine/voice/rewrite.py` still name Qwen2.5-1.5B (config uses 2.5-3B). Fix it as part of the model switch, not before.
+Decided by: Khang.
+
+**2026-11-02. Sessions end with /wrap-up.**
+Khang runs `/wrap-up` (`.claude/skills/wrap-up/SKILL.md`). It writes a new entry at the top of `docs/SESSION_LOG.md` and updates STATUS.md and this file, so the Cowork chat knows what happened. Claude doesn't wrap up on its own. Replaces the CLAUDE.md rule "update STATUS.md at the end of every session".
+Decided by: Khang.
+
+**2026-11-02. Scoring runner spec for the clean-up evaluation.**
+Measure only, no app changes. Runner in `eval/dictation_cleanup/`, results in `eval/dictation_cleanup/runs/` (git-ignored). Backends "current" (today's clean-up exactly as the app runs it, the baseline), "transformers" (any model on the GPU; Qwen3.5 with thinking off and the card's non-thinking sampling with a fixed seed) and "fake" (tests). Prompts are versioned text files: "plain" (asr_best only) and "full" (plus alternatives, app, context, personal words). New models answer in JSON with `text`, `alternatives` and `uncertain`; broken JSON counts as a failure, with no silent retry. Dev split by default; holdout only with an explicit flag, after the pass bar is set.
+Decided by: Khang.
+
 ---
 
 ## Proposed, not yet agreed
