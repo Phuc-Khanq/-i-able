@@ -148,6 +148,10 @@ class TestInventedFacts(unittest.TestCase):
         c = case(asr_best="Send it to Sam")
         self.assertEqual(scoring.invented_facts(c, answer("Send it to Sam.", ["Send it to Sandy."])), ["name: sandy"])
 
+    def test_a_name_from_the_word_list_is_not_invented(self):
+        c = case(asr_best="Tell Alix I am coming", personal_words="Alex|Alice")
+        self.assertEqual(scoring.invented_facts(c, answer("Tell Alex I am coming.", ["Tell Alice I am coming."])), [])
+
 
 class TestSummary(unittest.TestCase):
     def test_rates(self):

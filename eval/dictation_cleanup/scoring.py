@@ -134,8 +134,10 @@ def _negations(text: str) -> set[str]:
 
 def invented_facts(case: dict, answer: Answer) -> list[str]:
     """Numbers, names and negations in the answer (text and alternatives) that aren't in the input,
-    the alternative transcripts or the context. Flags for a person to look at, not proof."""
+    the alternative transcripts, the context or the user's word list (a name from their own list isn't
+    invented: case A08). Flags for a person to look at, not proof."""
     sources = [case.get(k, "") for k in ("asr_best", "asr_alt1", "asr_alt2", "context")]
+    sources += [w for w in case.get("personal_words", "").split("|") if w.strip()]
     src_words = {w for s in sources for w in normalize_words(s)}
     src_tokens = {_word(t) for s in sources for t in s.split()} | src_words
     src_neg = set().union(*(_negations(s) for s in sources))
