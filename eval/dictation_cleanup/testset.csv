@@ -1,0 +1,101 @@
+﻿id,split,category,app,context,asr_best,asr_alt1,asr_alt2,personal_words,intended,must_keep,expected_behavior,notes
+M01,dev,mispronounced,email,Replying to Dr. Alvarez about moving an appointment,Can we move the appointment to Thursday at to o'clock,Can we move the appointment to Thursday at two o'clock,,,Can we move the appointment to Thursday at two o'clock?,Thursday|two,rewrite,Number homophone; the alternative has the right answer.
+M02,dev,mispronounced,chat,Friend asked what time dinner is,Dinner is at sex thirty,Dinner is at six thirty,,,Dinner is at six thirty.,six thirty,rewrite,Real-word substitution; context and n-best agree.
+M03,holdout,mispronounced,email,,Can you send me the sedule for next week,Can you send me the schedule for next week,,,Can you send me the schedule for next week?,next week,rewrite,Missing sound.
+M04,dev,mispronounced,notes,Shopping list,I need to by some milk and breed,I need to buy some milk and bread,,,I need to buy some milk and bread.,milk|bread,rewrite,Two substitutions in one sentence.
+M05,dev,mispronounced,chat,Message to a family member,I will call you wen I get home,I will call you when I get home,,,I will call you when I get home.,,rewrite,Dropped final consonant.
+M06,holdout,mispronounced,document,Agenda draft,The metting is on Friday morning,The meeting is on Friday morning,,,The meeting is on Friday morning.,Friday morning,rewrite,
+M07,dev,mispronounced,email,Thread about the rent payment,Please send me the recipe for the rent payment,Please send me the receipt for the rent payment,,,Please send me the receipt for the rent payment.,rent payment,rewrite,Real word (recipe) that only context fixes.
+M08,dev,mispronounced,search,,wether in Gainesville tomorrow,weather in Gainesville tomorrow,,,weather in Gainesville tomorrow,Gainesville|tomorrow,rewrite,Place name must survive.
+M09,holdout,mispronounced,chat,,I am feeling much bedder today,I am feeling much better today,,,I am feeling much better today.,,rewrite,Voicing error.
+M10,dev,mispronounced,chat,Message to a teammate,Tell Coa I will be late,Tell Khoa I will be late,,Khoa,Tell Khoa I will be late.,Khoa,rewrite,Personal word list should win.
+M11,dev,mispronounced,email,Forwarding paperwork,Please forward this to doctor Alvaro's office,Please forward this to Dr. Alvarez's office,,Alvarez,Please forward this to Dr. Alvarez's office.,Alvarez,rewrite,Name from the personal list.
+M12,holdout,mispronounced,chat,Asking a family member to run an errand at the pharmacy,Can you pick up my subscription from the pharmacy,Can you pick up my prescription from the pharmacy,,,Can you pick up my prescription from the pharmacy?,pharmacy,rewrite,Real word (subscription); context is the pharmacy.
+M13,dev,mispronounced,chat,,Turn on the lice in the living room,Turn on the lights in the living room,,,Turn on the lights in the living room.,living room,rewrite,
+M14,dev,mispronounced,chat,,I would like a glass of water pees,I would like a glass of water please,,,"I would like a glass of water, please.",water,rewrite,
+M15,holdout,mispronounced,email,,Thank you for your hep,Thank you for your help,,,Thank you for your help.,,rewrite,
+M16,dev,mispronounced,chat,Earlier in the chat: the bus leaves at 7:15,The bus comes at seven fifty,The bus comes at seven fifteen,,,The bus comes at seven fifteen.,seven fifteen,rewrite,Numbers are risky: only change because the context and the alternative support it.
+M17,dev,mispronounced,chat,Message to the clinic,Please ask about my refiel,Please ask about my refill,,,Please ask about my refill.,,rewrite,
+M18,holdout,mispronounced,notes,,I want to go to the libary today,I want to go to the library today,,,I want to go to the library today.,today,rewrite,
+M19,dev,mispronounced,chat,,Can you help me with my homewok,Can you help me with my homework,,,Can you help me with my homework?,,rewrite,
+M20,dev,mispronounced,search,,What time does the store clothes today,What time does the store close today,,,What time does the store close today?,today,rewrite,Real word (clothes).
+M21,holdout,mispronounced,chat,Sharing photos,Send the pitcher to my sister,Send the picture to my sister,,,Send the picture to my sister.,sister,rewrite,Real word (pitcher).
+M22,dev,mispronounced,chat,,My phone is in the cur,My phone is in the car,,,My phone is in the car.,,rewrite,
+M23,dev,mispronounced,document,Shopping receipt note,I need a new pare of glasses,I need a new pair of glasses,,,I need a new pair of glasses.,,rewrite,Real word (pare).
+M24,holdout,mispronounced,email,Note to a school,Message from the school about the fiel trip,Message from the school about the field trip,,,Message from the school about the field trip.,,rewrite,
+M25,dev,mispronounced,document,Product description,Our product is called eye able,Our product is called I able,,[eye]able,Our product is called [eye]able.,[eye]able,rewrite,"Product name from the personal list, with brackets."
+M26,dev,mispronounced,notes,Shopping list,Please add eggs flour and shuger to the list,Please add eggs flour and sugar to the list,,,"Please add eggs, flour, and sugar to the list.",eggs|flour,rewrite,
+M27,holdout,mispronounced,chat,,"I'm on my way, be there in tin minutes","I'm on my way, be there in ten minutes",,,"I'm on my way, be there in ten minutes.",ten minutes,rewrite,Vowel shift in a number.
+M28,dev,mispronounced,chat,,Could you open the windo,Could you open the window,,,Could you open the window?,,rewrite,
+M29,dev,mispronounced,email,Hotel booking,I am writing to confirm my reservashun for Saturday,I am writing to confirm my reservation for Saturday,,,I am writing to confirm my reservation for Saturday.,Saturday,rewrite,
+M30,holdout,mispronounced,chat,"Picnic planning list: blanket, cheese, juice",Don't forget the keys,Don't forget the cheese,,,Don't forget the cheese.,,rewrite,Only the context (picnic list) points to the second option.
+S01,dev,broken_structure,chat,Message to the clinic,tomorrow doctor appointment cancel,,,,Please cancel my doctor appointment tomorrow.,tomorrow,rewrite,Fragment; must not add facts.
+S02,dev,broken_structure,chat,,I I I want want go store,,,,I want to go to the store.,,rewrite,Repeats and missing words.
+S03,holdout,broken_structure,email,,Hello. Meeting Thursday. I can not come. Car broken.,,,,"Hello, I cannot come to the meeting on Thursday because my car is broken.",Thursday,rewrite,Joining clauses is fine; no new facts.
+S04,dev,broken_structure,chat,,Mom call me tonight please,,,,"Mom, please call me tonight.",tonight,rewrite,"Or: Please call me tonight, Mom."
+S05,dev,broken_structure,notes,Shopping list,Need buy eggs milk bread,,,,"I need to buy eggs, milk, and bread.",eggs|milk|bread,rewrite,
+S06,holdout,broken_structure,chat,Friends planning a night out,Friday what time movie,,,,What time is the movie on Friday?,Friday,rewrite,
+S07,dev,broken_structure,chat,,Thank you help yesterday very good,,,,Thank you for your help yesterday. It was very good.,yesterday,rewrite,Several readings are acceptable if meaning is kept.
+S08,dev,broken_structure,email,,Please send report my email by Monday,,,,Please send the report to my email by Monday.,Monday,rewrite,
+S09,holdout,broken_structure,chat,In a shop,How much cost this,,,,How much does this cost?,,rewrite,
+S10,dev,broken_structure,chat,,I am sorry late I am coming now,,,,I am sorry I am late. I am coming now.,,rewrite,
+S11,dev,broken_structure,chat,Message to a relative,Doctor said take medicine two time day,,,,The doctor said to take the medicine two times a day.,two,rewrite,The number two must not change.
+S12,holdout,broken_structure,chat,,Where bathroom,,,,Where is the bathroom?,,rewrite,Very short.
+S13,dev,broken_structure,chat,,Can you turn up the heat is cold,,,,Can you turn up the heat? It is cold.,,rewrite,Run-on.
+S14,dev,broken_structure,chat,Invitation,Party Saturday three o'clock my house you come,,,,There is a party at my house on Saturday at three o'clock. Can you come?,Saturday|three,rewrite,
+S15,holdout,broken_structure,chat,,I want tell you thank you your gift beautiful,,,,I want to tell you thank you. Your gift is beautiful.,,rewrite,
+S16,dev,broken_structure,document,,The the the report is is ready,,,,The report is ready.,,rewrite,Stutter-like repeats; just remove them.
+S17,dev,broken_structure,email,,"I want to, no, I need to send the invoice today",,,,I need to send the invoice today.,today,rewrite,Self-correction: keep the corrected version.
+S18,holdout,broken_structure,chat,Message to a teammate,Tell Hung call move noon,,,Hung,Tell Hung the call is moved to noon.,Hung|noon,rewrite,
+S19,dev,broken_structure,chat,,Bring charger not forget,,,,Do not forget to bring the charger.,,rewrite,
+S20,dev,broken_structure,chat,,Dinner tonight what we eat,,,,What are we eating for dinner tonight?,tonight,rewrite,
+S21,holdout,broken_structure,email,Writing to Professor Reyes,Extension homework ask please,,,,Could I please have an extension on the homework?,extension,rewrite,The context tells us who is being asked.
+S22,dev,broken_structure,chat,,Pharmacy close at nine call before,,,,"The pharmacy closes at nine, so please call before then.",nine,rewrite,Joining with 'so' is acceptable; the time must stay nine.
+S23,dev,broken_structure,chat,,Because rain game cancel,,,,The game is canceled because of the rain.,,rewrite,
+S24,holdout,broken_structure,chat,,Please you help me find my keys,,,,Please help me find my keys.,keys,rewrite,
+S25,dev,broken_structure,chat,Friends,Lunch tomorrow twelve restaurant Italian,,,,Let's have lunch tomorrow at twelve at the Italian restaurant.,tomorrow|twelve|Italian,rewrite,
+S26,dev,broken_structure,chat,,Can I borrow your book finished I give back Friday,,,,"Can I borrow your book? When I have finished it, I will give it back on Friday.",Friday,rewrite,
+S27,holdout,broken_structure,document,Phone call script,My name is is Sam Okafor I am calling about order,,,Sam Okafor,My name is Sam Okafor. I am calling about my order.,Sam Okafor,rewrite,
+S28,dev,broken_structure,chat,At a cafe,No sugar coffee please for me,,,,"Coffee with no sugar for me, please.",no sugar,rewrite,The negation is the point.
+S29,dev,broken_structure,chat,,Meeting not Tuesday it is Wednesday,,,,The meeting is not on Tuesday. It is on Wednesday.,Tuesday|Wednesday,rewrite,
+S30,holdout,broken_structure,chat,,Everything for thank you,,,,Thank you for everything.,,rewrite,Word order scrambled.
+X01,dev,mixed,chat,Message to the clinic,Cansel doctor appoinment tomorow,Cancel doctor appointment tomorrow,,,Please cancel my doctor appointment tomorrow.,tomorrow,rewrite,
+X02,dev,mixed,notes,Shopping list,I need by mick eggs store tomorow,I need buy milk eggs store tomorrow,,,I need to buy milk and eggs at the store tomorrow.,milk|eggs|tomorrow,rewrite,
+X03,holdout,mixed,chat,,Meting Thurday two clock can not,Meeting Thursday two o'clock can not,,,I cannot make the meeting on Thursday at two o'clock.,Thursday|two,rewrite,
+X04,dev,mixed,chat,,Where is my pare glasses,Where is my pair of glasses,,,Where is my pair of glasses?,glasses,rewrite,
+X05,dev,mixed,chat,Waiting for a teammate,Tel Coa I am hear in lobby,Tell Khoa I am here in lobby,,Khoa,Tell Khoa I am here in the lobby.,Khoa,rewrite,
+X06,holdout,mixed,chat,,Plees help me open windo hot,Please help me open window hot,,,Please help me open the window. It is hot.,,rewrite,
+X07,dev,mixed,search,,Wen is class stat tomorow,When is class start tomorrow,,,When does class start tomorrow?,tomorrow,rewrite,
+X08,dev,mixed,chat,Sharing photos,Send pitcher to mom now,Send picture to mom now,,,Send the picture to Mom now.,Mom,rewrite,
+X09,holdout,mixed,email,Writing to a landlord,Rent payment resipt please send landlord,Rent payment receipt please send landlord,,,Please send the rent payment receipt to the landlord.,rent payment,rewrite,
+X10,dev,mixed,chat,Message to an assistant,Can you rite email for me to profesor,Can you write email for me to professor,,,Can you write an email for me to the professor?,,rewrite,
+A01,dev,ambiguous,chat,,Can you meet me at the bank,Can you meet me at the bench,,,Can you meet me at the bank? || Can you meet me at the bench?,,show_both,Near-tie with no context.
+A02,dev,ambiguous,chat,,Send it to Sam,Send it to Sandy,,Sam|Sandy,Send it to Sam. || Send it to Sandy.,,show_both,Both names are on the personal list.
+A03,holdout,ambiguous,chat,,The package weighs fifteen pounds,The package weighs fifty pounds,,,The package weighs fifteen pounds. || The package weighs fifty pounds.,,show_both,Numbers: never pick silently.
+A04,dev,ambiguous,chat,,Tell him no,Tell him now,,,Tell him no. || Tell him now.,,show_both,Opposite meanings.
+A05,dev,ambiguous,chat,,I can go on Friday,I can't go on Friday,,,I can go on Friday. || I can't go on Friday.,Friday,show_both,Negation near-tie: the most dangerous kind.
+A06,holdout,ambiguous,chat,The calendar has a doctor appointment and a team call on Thursday,Cancel Thursday,,,,Cancel Thursday's doctor appointment. || Cancel Thursday's team call.,Thursday,show_both,Two things could be meant.
+A07,dev,ambiguous,chat,,Move it to Friday,,,,Move it to Friday.,Friday,unchanged,No way to know what 'it' is. Do not invent it.
+A08,dev,ambiguous,chat,,Tell Alix I am coming,Tell Alex I am coming,,Alex|Alice,Tell Alex I am coming. || Tell Alice I am coming.,,show_both,Both names on the personal list.
+A09,holdout,ambiguous,chat,,Said late she he,,,,He said she is late. || She said he is late.,,show_both,Scrambled order has two readings.
+A10,dev,ambiguous,email,,Ask Doctor Mehta about the form,Ask Doctor Mehra about the form,,,Ask Doctor Mehta about the form. || Ask Doctor Mehra about the form.,,show_both,"Unknown name, two close spellings."
+A11,dev,ambiguous,chat,,I will pay you back on the fourth,I will pay you back on the first,,,I will pay you back on the fourth. || I will pay you back on the first.,,show_both,Dates are as risky as numbers.
+A12,holdout,ambiguous,chat,,I need to see him,I need to see Jim,,Jim,I need to see him. || I need to see Jim.,,show_both,The personal word is weak evidence.
+A13,dev,ambiguous,chat,,Because of the,,,,Because of the,,keep_original_and_flag,Cut-off sentence. Do not finish it for the person.
+A14,dev,ambiguous,chat,,I don't think so,I do think so,,,I don't think so. || I do think so.,,show_both,Negation near-tie.
+A15,holdout,ambiguous,chat,,Please don't send it,Please send it,,,Please don't send it. || Please send it.,,show_both,Negation near-tie on an action.
+C01,dev,clean_control,email,,Please send the report to Dr. Alvarez by Friday at 5 p.m.,,,Alvarez,Please send the report to Dr. Alvarez by Friday at 5 p.m.,Alvarez|Friday|5 p.m.,unchanged,"Name, day and time must survive."
+C02,dev,clean_control,chat,,I'll be there in ten minutes.,,,,I'll be there in ten minutes.,ten minutes,unchanged,
+C03,holdout,clean_control,chat,,Thank you so much for your help today.,,,,Thank you so much for your help today.,,unchanged,
+C04,dev,clean_control,chat,,Can you pick up milk and bread on your way home?,,,,Can you pick up milk and bread on your way home?,milk|bread,unchanged,
+C05,dev,clean_control,chat,,The meeting moved to Thursday at two o'clock.,,,,The meeting moved to Thursday at two o'clock.,Thursday|two,unchanged,
+C06,holdout,clean_control,chat,,I'm gonna head out soon.,,,,I'm gonna head out soon.,,unchanged,Casual wording is the person's voice. Tidy may keep it.
+C07,dev,clean_control,document,,"My address is 245 Oak Street, Gainesville.",,,,"My address is 245 Oak Street, Gainesville.",245|Oak Street|Gainesville,unchanged,Digits and names.
+C08,dev,clean_control,chat,,Happy birthday! Hope you have a great day.,,,,Happy birthday! Hope you have a great day.,,unchanged,
+C09,holdout,clean_control,chat,,"No, I do not want any sugar in my coffee.",,,,"No, I do not want any sugar in my coffee.",not|sugar,unchanged,Negation must survive.
+C10,dev,clean_control,chat,,She said she would call back after lunch.,,,,She said she would call back after lunch.,,unchanged,
+C11,dev,clean_control,chat,,"Yes, that works for me.",,,,"Yes, that works for me.",,unchanged,Short reply.
+C12,holdout,clean_control,notes,,Please remind me to take out the trash tonight.,,,,Please remind me to take out the trash tonight.,tonight,unchanged,
+C13,dev,clean_control,email,,I disagree with the second point in your email.,,,,I disagree with the second point in your email.,second,unchanged,Opinion must not be softened.
+C14,dev,clean_control,chat,,We should order pizza for dinner.,,,,We should order pizza for dinner.,pizza,unchanged,
+C15,holdout,clean_control,chat,,"Can you open the door for me, please?",,,,"Can you open the door for me, please?",door,unchanged,
