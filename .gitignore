@@ -53,3 +53,6 @@ eyeable-logo-pack.zip
 # Claude Code: personal instructions and settings stay on this PC
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Clean-up evaluation runs (model outputs, timings): kept on this PC
+eval/dictation_cleanup/runs/
