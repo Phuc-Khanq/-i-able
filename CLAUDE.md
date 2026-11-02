@@ -81,7 +81,7 @@ Path-specific rules load automatically from `.claude/rules/` when you work in `e
 
 Khang uses two Claude sessions: this one for code, and a Cowork chat for research, planning, docs and a weekly tracker. Cowork reads this folder, so these files are how the two stay in sync.
 
-- **End of every session:** update `docs/STATUS.md` (date, done, in progress, next, blockers). Keep it under about 80 lines; move old "done" items into a dated line under "Earlier".
+- End of session: Khang runs /wrap-up. Don't wrap up on your own. docs/SESSION_LOG.md is the session-by-session record Cowork reads first.
 - **Every decision:** add a dated entry to `docs/DECISIONS.md` with the reason and the evidence (link or measured number). Never edit an old entry; add a new one that replaces it.
 - **"Weekly summary":** when Khang asks, write it from STATUS.md, DECISIONS.md and `git log --since="last friday" --all --oneline`, in this shape: Done, In progress, Decisions, Measured numbers, Blockers, Questions for the team. Plain text Khang can paste into Cowork.
 
