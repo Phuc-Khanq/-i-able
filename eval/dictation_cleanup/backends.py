@@ -127,7 +127,7 @@ class TransformersBackend:
                  sampling: dict | None = None) -> None:
         self.model_id, self.device, self.seed, self.max_new_tokens = model, device, seed, max_new_tokens
         self.sampling = dict(self.QWEN35_SAMPLING if sampling is None else sampling)
-        self._tok = self._model = self._template = None
+        self._tok = self._model = self._template = self._revision = None
 
     @property
     def model_label(self) -> str:
@@ -135,7 +135,7 @@ class TransformersBackend:
 
     def settings(self) -> dict:
         return {"backend": self.name, "model": self.model_id,
-                "revision": getattr(getattr(self._model, "config", None), "_commit_hash", None),
+                "revision": self._revision,
                 "device": self.device, "dtype": "bfloat16", "seed": self.seed, "seed_rule": "set before every case",
                 "max_new_tokens": self.max_new_tokens, "sampling": self.sampling, "enable_thinking": False,
                 "card_settings_not_applied": self.NOT_APPLIED,
@@ -164,6 +164,16 @@ class TransformersBackend:
         model.to(self.device)
         model.eval()
         self._tok, self._model, self._template = tok, model, template
+        self._revision = self._cached_revision()
+
+    def _cached_revision(self) -> str | None:
+        """The snapshot the weights came from (…/snapshots/<commit>/config.json in the local cache)."""
+        from pathlib import Path
+
+        from huggingface_hub import try_to_load_from_cache
+
+        path = try_to_load_from_cache(self.model_id, "config.json")
+        return Path(path).parent.name if isinstance(path, str) else None
 
     def _generate(self, messages: list[dict]) -> tuple[str, int, bool]:
         import torch
