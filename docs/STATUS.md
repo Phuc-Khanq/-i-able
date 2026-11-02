@@ -4,11 +4,14 @@ Last updated: 2026-11-02 18:31 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## Now
 
-- **Dictation clean-up model switch.** Replace Qwen2.5-3B (research licence) with the Qwen3.5 family. The scoring runner is built and the baseline is measured; next is Qwen3.5-4B (thinking off) with the plain and full prompts.
+- **Dictation clean-up model switch.** Replace Qwen2.5-3B (research licence) with the Qwen3.5 family. Prompt-only Qwen3.5-4B is measured: with the full prompt it beats today's clean-up on the automatic checks, but it is about 4x slower. Human review of the outputs is next.
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
 ## Done recently
+
+- 2026-11-02: Qwen3.5-4B (thinking off, prompt only) on dev, 5080, automatic checks. Plain prompt: 53/67 pass, silent guess 8/10, p50/p90/p99 1710/1976/2168 ms. Full prompt: 63/67 pass, ambiguous 10/10, silent guess 0/10, over-edit 0/10, 0 invented, 0 broken JSON, p50/p90/p99 1864/2205/2546 ms, 8.74 GB peak GPU. Baseline for comparison: 46/67, p50 435 ms. Speed caveat: Qwen3.5's fast kernels (`flash-linear-attention`, `causal-conv1d`) aren't installed, so transformers used its slower reference code.
+- 2026-11-02: `/start` command (`.claude/skills/start/`): one session per job, started with `/start <task>`.
 
 - 2026-11-02: scoring runner in `eval/dictation_cleanup/` (`python -m eval.dictation_cleanup.run --help`), 34 tests. Baseline measured for today's clean-up (Qwen2.5-3B, dev, 5080): 46/67 automatic-check pass, over-edit 0/10, silent guess 8/10, guard rejected 21/67 (16 of those would have passed), p50/p90/p99 435/573/748 ms, 6.34 GB peak GPU. Run folder: `eval/dictation_cleanup/runs/2026-11-02_Qwen2.5-3B-Instruct_app/`.
 - 2026-11-02: old-name scan: 169 lines in about 60 files, plus about 60 file names (see SESSION_LOG.md, 18:31).
@@ -30,12 +33,13 @@ Last updated: 2026-11-02 18:31 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## In progress
 
-- Qwen3.5-4B download (9.34 GB, approved) into the Hugging Face cache; then its plain and full runs on dev.
+- Nothing running. Three run folders in `eval/dictation_cleanup/runs/` wait for human review.
 
 ## Next
 
-1. Qwen3.5-4B on dev with `--prompt v1_plain`, then `--prompt v1_full`. Compare with the baseline.
-2. Khang and Khoi fill in the review sheets (`review.csv` in each run folder) and review the test set.
+1. Khang and Khoi fill in the review sheets (`review.csv` in each run folder), starting with the Qwen3.5-4B full run, and review the test set. The automatic checks can't see meaning.
+2. Decide how the card shows the model's `alternatives`. In A05 the full prompt put "I can't go on Friday" first and the user's own words second, with `uncertain` false: the main reading flipped a negation.
+3. Speed: check the licences of `flash-linear-attention` and `causal-conv1d` and whether they install on Windows; then re-time. Then Qwen3.5-2B and 0.8B with the full prompt.
 3. Rename, once the exact name is given: display text first, then the voice command and file names, then the bigger renames (website folder, repo URL), each its own commit.
 4. Decide whether the app's guard should reject invented numbers (M01: "to o'clock" became "1 o'clock" and was accepted).
 5. Same set with Qwen3.5-2B and 0.8B; then time the light sizes on a low-end laptop (8 GB RAM, no NVIDIA GPU).
