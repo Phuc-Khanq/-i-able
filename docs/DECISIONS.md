@@ -62,6 +62,14 @@ Decided by: Khang.
 Measure only, no app changes. Runner in `eval/dictation_cleanup/`, results in `eval/dictation_cleanup/runs/` (git-ignored). Backends "current" (today's clean-up exactly as the app runs it, the baseline), "transformers" (any model on the GPU; Qwen3.5 with thinking off and the card's non-thinking sampling with a fixed seed) and "fake" (tests). Prompts are versioned text files: "plain" (asr_best only) and "full" (plus alternatives, app, context, personal words). New models answer in JSON with `text`, `alternatives` and `uncertain`; broken JSON counts as a failure, with no silent retry. Dev split by default; holdout only with an explicit flag, after the pass bar is set.
 Decided by: Khang.
 
+**2026-11-02. Qwen3.5-4B downloaded for the evaluation.**
+Licence: Apache 2.0 (the model page's licence field, read through the Hugging Face API on 2026-11-02, revision 851bf6e). 9.34 GB, in the Hugging Face cache on Khang's PC (`%USERPROFILE%\.cache\huggingface\hub`). Loaded as text only with `AutoModelForCausalLM` (`Qwen3_5ForCausalLM`), thinking off. Sampling from the card's non-thinking "general tasks" line: temperature 0.7, top_p 0.8, top_k 20, min_p 0, seed 1234 per case; the card's presence_penalty 1.5 isn't available in transformers and is not applied.
+Evidence: https://huggingface.co/Qwen/Qwen3.5-4B. Decided by: Khang (download approved).
+
+**2026-11-02. The invented-fact check also accepts names from the user's word list.**
+The spec said input, alternatives and context. Case A08's own intended answer ("Tell Alice I am coming") uses a name that is only on the word list, so a name from the user's own list isn't treated as invented. Commit 41ccec7.
+Decided by: Claude while building; Khang to confirm.
+
 ---
 
 ## Proposed, not yet agreed
