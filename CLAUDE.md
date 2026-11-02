@@ -48,7 +48,7 @@ Path-specific rules load automatically from `.claude/rules/` when you work in `e
 2. **Never commit:** `models/`, `data/`, `checkpoints/`, `downloads/`, recordings, `calibration/`, `config.local.json`, `.env`, `.venv`, `node_modules`, files over 50 MB, or private notes (`*Handoff*.md`, `*Build Plan.md`, `*_Project_Description.md`, `CLAUDE.local.md`). Stage named folders (`git add engine/voice`), never `git add .` or `git add -A`.
 3. **TORGO is academic and non-profit only.** Never publish, upload, ship or commit the TORGO data or any model or adapter trained on it.
 4. **Licences must allow commercial use.** Any new model, dataset or package needs Apache 2.0, MIT, BSD, CC BY or similar. Check the licence on the source's own page before adding it, and record it in `docs/DECISIONS.md`. Qwen2.5-3B (research licence) and UI-Venus 1.5 (conflicting licence statements) are being replaced: build nothing new on them.
-5. **The repo is public.** No business plans, team-private notes or personal details in committed files.
+5. **Two remotes.** `origin` is the private repo (`Phuc-Khanq/-i-able`, on Khang's account): all work goes there. `public` is the old public repo (`Phuc-Khanq/-eye-able`), kept as the hackathon archive and website host. Never push `main` or any working branch to `public`: that publishes the private code to the world. Even in the private repo: no secrets and no personal details of users or testers.
 6. **Never commit to `main`, never force-push, never rewrite pushed history.** Ask before every `git push`.
 
 ## Code conventions (full list in CONTRIBUTING.md)

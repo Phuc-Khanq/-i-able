@@ -9,7 +9,8 @@ Last updated: 2026-11-02 (first Claude Code session)
 
 ## Done recently
 
-- 2026-11-02: setup files and test set committed on branch `voice-cleanup-eval` (from `main`; not pushed). `origin/voice` no longer exists and local `voice` was 59 commits behind `main`.
+- 2026-11-02: moved to the private repo `Phuc-Khanq/-i-able` (remote `origin`): all 9 local branches and 5 tags pushed. The old public repo is now remote `public`. See DECISIONS.md.
+- 2026-11-02: setup files and test set committed on branch `voice-cleanup-eval` (from `main`). Local `voice` was 59 commits behind `main`, so it was left as it was.
 - 2026-11-02: `eval/dictation_cleanup/` created: 100 original test cases (30 mispronounced, 30 broken structure, 10 mixed, 15 ambiguous, 15 clean controls; 33 held out) and a README with the scoring rules. Drafted by Claude, not yet reviewed by Khang or Khoi.
 - 2026-11-02: Claude Code set up: `CLAUDE.md`, `.claude/rules/`, `.claude/settings.json`, this file, `docs/DECISIONS.md`.
 - Earlier: hackathon build (head pointer, long-blink click, voice commands, dictation with preview and clean-up, click by name, website live demo, Windows installer, about 900 tests). See README.
@@ -39,6 +40,9 @@ Last updated: 2026-11-02 (first Claude Code session)
 
 - Qwen3.5 training uses custom kernels that may not work on Windows with the RTX 5080. Fallback: WSL2.
 - The test cases were invented, not taken from real users. Real users or a speech-language pathologist should review them later.
+- Website updates: the live site is served from the public repo, and pushing `main` there would publish the private code. Pick a way to update it (e.g. a separate public repo holding only `eyeable-frontend/`). The Pages workflow will also fail in the private repo until it's switched off there.
+- Open for a lawyer: the licence for new private code, and IP agreements with everyone who wrote code.
+- Remove the two people who left from the old public repo's collaborators (Khang, on GitHub).
 
 ## Uncommitted work on Khang's PC
 

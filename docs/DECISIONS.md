@@ -35,6 +35,11 @@ Decided by: Khang.
 Code, tests, evaluation runs and training happen in Claude Code on Khang's PC. Research, planning, docs and the weekly tracker happen in Cowork. `docs/STATUS.md` and this file connect the two.
 Decided by: Khang.
 
+**2026-11-02. Development moves to a private repo on Khang's account.**
+Two of the original five left and the product is going a different way, so new work shouldn't be public. New private repo `Phuc-Khanq/-i-able` (remote `origin`) holds the full history: every local branch and tag was pushed on 2026-11-02. The old public repo `Phuc-Khanq/-eye-able` (remote `public`) stays as the hackathon archive and website host; nothing new is pushed to it. Replaces CLAUDE.md's old rule "the repo is public".
+Known limits: the code already public stays usable by anyone under its MIT licence; going private only protects new work. The licence for new code and IP agreements with past and current contributors are still open (a lawyer's question).
+Decided by: Khang.
+
 ---
 
 ## Proposed, not yet agreed
