@@ -64,6 +64,7 @@ Path-specific rules load automatically from `.claude/rules/` when you work in `e
 
 - Work on the route branch: `voice` (dictation, speech, `eval/`), `eyes` (pointer, gestures, capture), `ui` (website). Start with `git switch <route>` then `git pull origin main`.
 - Commit messages start with the route: `voice:`, `eyes:`, `ui:`, `core:`, `eval:`, `docs:`. Small commits, one idea each.
+- Every commit is under the developer's own git name. No `Co-Authored-By` lines and no Claude or "Generated with" attribution in commit messages or pull requests.
 - Merge into `main` only through a pull request (template in `.github/`). Khang merges after `scripts\run_demo.ps1` works on the reference machine.
 
 ## How to work here
