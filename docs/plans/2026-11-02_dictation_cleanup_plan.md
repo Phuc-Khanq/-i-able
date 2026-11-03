@@ -39,14 +39,15 @@ The app waits at most `rewrite_wait_s` = 1.5 s for the quick clean-up after "yes
 ## 3. Human review and the pass bar
 
 - Blind sheet: `eval/dictation_cleanup/reviews/2026-11-02_dev.csv`, 134 rows: today's app and Qwen3.5-4B v3, labelled A and B at random per case. Khang and Khoi fill in `y`/`n` for "meaning kept" and "nothing invented", and flag bad test cases under `case_looks_wrong`. Then `review_sheet score`. Limit: only the new model can show "[or: …]" and "[marked unsure]", so a reviewer can sometimes guess which output is which.
-- **Proposed pass bar** (for the holdout run; agree it before anyone runs the holdout). On the 33 holdout cases, human-scored:
-  1. Invented facts: **0**.
-  2. Clean controls changed: **0 of 5**.
-  3. Ambiguous cases resolved silently: **0 of 5** (marking unsure counts as safe).
+- **Pass bar: agreed by Khang on 2026-11-02** (DECISIONS.md has the full text). On the 33 holdout cases, with Khang and Khoi agreeing one answer per case:
+  1. Serious invented facts (numbers, dates and times, names, places, amounts, negations): **0**.
+  2. Clean controls changed: **at most 1 of 5**, and the change keeps the meaning.
+  3. Ambiguous cases resolved silently: **at most 1 of 5**.
   4. Main reading that flips a negation or changes a number, name or date against the heard words without evidence: **0**.
   5. Broken answers: **0**.
-  6. Full pass (all four checks of the README): **at least 27 of 33 (80%)**, and at least 15 points above today's app on the same cases.
-  7. Speed on the 5080, warm: p90 **at most 1.5 s** to use it for the quick clean-up; at most 6 s to use it for the refine only.
+  6. Full pass (all four checks of the README): **at least 28 of 33 (85%)**, and at least 15 points above today's app on the same cases.
+  7. Speed on the 5080, warm: p90 **at most 6 s** for the refine; **at most 1.5 s** to also use it for the quick clean-up.
+- The holdout runs once, with the final candidate, after the dev review.
 - With 33 cases one case is 3 points. This is a go/no-go for building, not a number to publish.
 
 ## 4. App change (after the bar is met)
@@ -65,5 +66,5 @@ Each step is its own pull request, tested with `scripts\run_demo.ps1` on the ref
 1. Is 1.5 s the right budget, or may the quick clean-up wait longer?
 2. Option B (llama.cpp) for speed: OK to download a Windows build and the 4-bit files (4B 2.74 GB)?
 3. Where do alternatives come from (section 4.4)? This decides how much of the gain the app keeps.
-4. The pass bar in section 3: agree or change.
+4. ~~The pass bar in section 3~~: agreed 2026-11-02.
 5. Test case M25 (the product name) after the rename.

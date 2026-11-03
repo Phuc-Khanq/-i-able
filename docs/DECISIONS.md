@@ -70,6 +70,18 @@ Evidence: https://huggingface.co/Qwen/Qwen3.5-4B. Decided by: Khang (download ap
 The spec said input, alternatives and context. Case A08's own intended answer ("Tell Alice I am coming") uses a name that is only on the word list, so a name from the user's own list isn't treated as invented. Commit 41ccec7.
 Decided by: Claude while building; Khang to confirm.
 
+**2026-11-02. The pass bar for the clean-up holdout run.**
+Agreed before anyone has run the holdout. It replaces the draft under "Proposed" (2026-11-02), with Khang's changes: a softer rule on clean controls and invented facts, a stricter full-pass rate. On the 33 holdout cases, scored by Khang and Khoi, who agree one answer per case (Khang has the final say):
+1. Serious invented facts: 0. Serious means numbers, dates and times, names, places, amounts and negations; small connecting words (my, please, the) don't count.
+2. Clean controls changed: at most 1 of 5, and the change must keep the meaning. Punctuation and capitals don't count as changes.
+3. Ambiguous cases resolved silently: at most 1 of 5.
+4. A main reading that flips a negation or changes a number, name or date against the heard words without evidence: 0.
+5. Broken answers: 0.
+6. Full pass (README's four checks): at least 28 of 33 (85%), and at least 15 points above today's app on the same cases.
+7. Speed on the 5080, warm: p90 at most 6 s to use it for the whole-passage refine; at most 1.5 s to also use it for the quick clean-up.
+The holdout is run once, with the final dev-tuned candidate, after the dev review. With 33 cases one case is 3 points: this is a go/no-go for building, not a number to publish.
+Decided by: Khang (Q4: A, after comparing "never" with "allowed if marked unsure").
+
 ---
 
 ## Proposed, not yet agreed
