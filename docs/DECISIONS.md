@@ -94,6 +94,19 @@ Decided by: Khang.
 v4 (`prompts/cleanup_v4_full.txt`) is v3 plus: never leave a fragment or broken word order as it is, write complete, polite sentences; a bare instruction becomes a polite request; "even a real word" can be a mishearing; two made-up examples (laundry, umbrella). Dev only, Qwen3.5-4B, same settings. Dev review (Claude, Khang's rule; unchanged outputs keep Khang's v3 answers): full pass 59/67 (88%) vs v3 53/67 (79%) and the app 17/67 (25%); automatic 63/67; silent guesses 2/10; p90 2.45 s. New weak spots: X02 invented "tomatoes", M08 (search query made into an odd question), A07 ("Please" added to a clean sentence). Holdout note: while picking example words, a grep of `testset.csv` printed four holdout rows (M30, S06, S24, X06: keys, a movie time, keys, a window); the examples avoid those topics. Tuning stops at v4; next is the holdout run, once.
 Evidence: `eval/dictation_cleanup/reviews/2026-11-02_dev_v4_score.md`, run folder `runs/2026-11-02_Qwen3.5-4B_cleanup_v4_full`. Decided by: Claude (Khang asked for v4); Khang to confirm before the holdout.
 
+**2026-11-02. Holdout result: Qwen3.5-4B with prompt v4 does not meet the pass bar.**
+Run once, as agreed (33 holdout cases, 5080, same settings as dev). Review filled in by Claude with Khang's rule; not truly blind, since only the new model shows "[or: ...]". Against the bar:
+1. Serious invented facts: 0 (pass). Today's app invented one (M27, "three minutes").
+2. Clean controls changed: 0 of 5 (pass).
+3. Ambiguous cases resolved silently: 4 of 5 (FAIL, bar is at most 1). A06, A09, A12, A15.
+4. Main reading flips a negation or changes a number, name or date without evidence: 0 (pass). Borderline: A12 wrote "Jim" (word list and other hearing) instead of the heard "him", without showing both.
+5. Broken answers: 0 (pass).
+6. Full pass: 22 of 33 (67%) (FAIL, bar is 28). Today's app: 7 of 33 (21%), so +46 points (pass).
+7. Speed, warm: p50/p90/p99 2041/2465/2981 ms. Fits the 6 s refine; not the 1.5 s quick clean-up.
+Verdict: no-go for building on this prompt as it stands. Dev said 88% and the holdout says 67%: the prompt was fitted to the dev cases more than it looked. Main misses: wrong word first with the right one only as an option even when the context points to it (M12, M21, M30), broken sentences still curt (X03, S30, S18 wrong meaning), and ambiguous cases with no other hearing given (A06, A09) or a negation pair (A15) not shown as two readings.
+The holdout is now spent: tuning against what it showed and running it again would not be a fair test. Any next candidate needs fresh held-out cases.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-02_holdout_score.md`, run folders `runs/2026-11-02_Qwen3.5-4B_cleanup_v4_full_2` and `runs/2026-11-02_Qwen2.5-3B-Instruct_app_2`. Decided by: the agreed bar; Khang to choose what comes next.
+
 ---
 
 ## Proposed, not yet agreed
