@@ -53,6 +53,19 @@ against the heard words, show the heard words instead. Port the tests from `test
 or a gesture; "use original" stays one step away. Never type an unsure reading that changes a negation or a number
 without the user picking it. (`engine/eyes/dictation_card.py` and the website.)
 
+Step 3 is built (2026-11-03, branch `voice-cleanup-app`): the request carries `context` and `app`, the result and
+`DICTATION_PREVIEW` carry `alternatives` and `uncertain`, and the website stores them. Nothing shows them yet.
+
+Proposal for step 4, **waiting for Khang's OK on the look** (the website rule: ask before changing layout):
+- Card, "Will type" state: under the text, a small "Or:" list, numbered from 2 ("2 · Send the pitcher to Mom."),
+  at most two lines. The action row gains "Option 2" (and "Option 3") next to "Use original"; the hint field says
+  "say option two". With `uncertain` the state label reads "Check this" instead of "Will type".
+- Voice: "option two", "option three" (exact-only commands, like "use original") put that reading in place of the
+  text; "use original" still gives the user's own words. A dwell or blink on the button does the same.
+- Website demo panel: the same list under the preview, same commands.
+- Safety: the main reading already can't add or drop a number, name or negation without a change of mind
+  (check_cleanup), so "yes" stays one step. Readings are only shown, never typed, until picked.
+
 **5. Shipping.** The installer or first run needs llama-server (the CUDA build is about 770 MB with NVIDIA's DLLs;
 CPU or Vulkan builds for laptops) and the model file (Q8_0 4.5 GB, Q4_K_M 2.7 GB).
 
