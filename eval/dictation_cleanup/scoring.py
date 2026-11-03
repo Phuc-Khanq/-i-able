@@ -33,6 +33,12 @@ def load_cases(path: Path = TESTSET, split: str = "dev") -> list[dict]:
         return [r for r in csv.DictReader(f) if r["split"] == split]
 
 
+def load_case_file(path: Path) -> list[dict]:
+    """Every case of another file in testset.csv's layout (e.g. a generated test set: bigset.py)."""
+    with Path(path).open(encoding="utf-8-sig", newline="") as f:
+        return list(csv.DictReader(f))
+
+
 # ------------------------------------------------------------------ the answer
 @dataclass
 class Answer:

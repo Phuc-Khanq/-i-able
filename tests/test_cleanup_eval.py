@@ -307,6 +307,21 @@ class TestLlamaCppBackend(unittest.TestCase):
         self.assertEqual((b.settings()["backend"], b.settings()["gguf_gb"]), ("llamacpp", None))
         b.close()                                                # nothing started: nothing to stop
 
+    def test_greedy_option(self):
+        import argparse
+
+        args = argparse.Namespace(backend="llamacpp", model=self.GGUF, llama_server=None, seed=1234,
+                                  max_new_tokens=256, device=None, adapter=None, greedy=True)
+        b = run.make_backend(args)
+        b._tok = b._template = FakeTokenizer()
+        b.sent = []
+        b._post = lambda path, body: b.sent.append(body) or {"content": "{}", "stop_type": "eos"}
+        b.clean(case(asr_best="hi"), load_prompt("t1_short"))
+        self.assertEqual((b.sent[0]["top_k"], b.sent[0]["samplers"]), (1, ["top_k"]))
+        self.assertNotIn("temperature", b.sent[0])
+        args.backend, args.model = "transformers", "Qwen/Qwen3.5-4B"
+        self.assertEqual(run.make_backend(args).sampling, {"do_sample": False})
+
     def test_runner_wants_a_gguf_file(self):
         import argparse
 
@@ -318,6 +333,39 @@ class TestLlamaCppBackend(unittest.TestCase):
         b = run.make_backend(args)
         self.assertIsInstance(b, backends.LlamaCppBackend)
         self.assertTrue(b.server.endswith("llama-server.exe"))
+
+
+class TestCaseFile(unittest.TestCase):
+    """--cases: another file in testset.csv's layout (e.g. the generated big test set)."""
+
+    def write(self, folder: Path) -> Path:
+        path = folder / "big_test.csv"
+        rows = [case(id="B0001", split="test", asr_best="um hi there", intended="Hi there."),
+                case(id="B0002", split="test", category="clean_control", expected_behavior="unchanged",
+                     asr_best="See you soon.", intended="See you soon.")]
+        with path.open("w", encoding="utf-8-sig", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        return path
+
+    def test_every_row_is_loaded_whatever_its_split(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cases = scoring.load_case_file(self.write(Path(tmp)))
+        self.assertEqual([c["id"] for c in cases], ["B0001", "B0002"])
+
+    def test_the_run_remembers_the_file_and_rescore_uses_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(Path(tmp))
+            out = run.run(backends.FakeBackend(), scoring.load_case_file(path), load_prompt("t1_short"),
+                          Path(tmp) / "runs", model_label="fake", split="cases:big_test", log=lambda *a: None,
+                          cases_file=path)
+            self.assertTrue(out.name.endswith("_cleanup_t1_short_big_test"))
+            meta = json.loads((out / "summary.json").read_text(encoding="utf-8"))["meta"]
+            self.assertEqual(meta["cases_file"], str(path))
+            run.rescore(out)                                     # finds B0001 and B0002 in the file
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["n"], 2)
 
 
 class TestRunner(unittest.TestCase):

@@ -55,14 +55,15 @@ def run_folder(out_root: Path, model_label: str, prompt_label: str) -> Path:
 
 
 def run(backend, cases: list[dict], prompt, out_root: Path = RUNS, model_label: str | None = None,
-        split: str = "dev", log=print) -> Path:
+        split: str = "dev", log=print, cases_file: Path | None = None) -> Path:
     """Load, warm up once (not timed), run every case, write the run folder. Returns the folder."""
     t0 = time.perf_counter()
     backend.load()
     load_s = round(time.perf_counter() - t0, 1)
     backend.warm_up()
     label = model_label or backend.model_label
-    folder = run_folder(out_root, label, prompt.name if prompt is not None else "app")
+    folder = run_folder(out_root, label, (prompt.name if prompt is not None else "app")
+                        + (f"_{Path(cases_file).stem}" if cases_file else ""))
     results: list[dict] = []
     with (folder / "results.jsonl").open("w", encoding="utf-8") as f:
         for i, case in enumerate(cases, 1):
@@ -81,7 +82,7 @@ def run(backend, cases: list[dict], prompt, out_root: Path = RUNS, model_label: 
     meta = {"model": label, "backend": backend.name, "prompt": prompt.name if prompt is not None else "app",
             "prompt_sha256": prompt.sha256 if prompt is not None else None, "split": split,
             "date": time.strftime("%Y-%m-%d %H:%M"), "machine": machine(), "peak_gpu_gb": backend.peak_gpu_gb(),
-            "load_s": load_s}
+            "load_s": load_s, "cases_file": str(cases_file) if cases_file else None}
     (folder / "settings.json").write_text(json.dumps({**backend.settings(), **meta}, indent=2), encoding="utf-8")
     _write_summary(folder, results, meta)
     return folder
@@ -97,7 +98,11 @@ def _write_summary(folder: Path, results: list[dict], meta: dict) -> None:
 def rescore(folder: Path) -> None:
     """Re-run the automatic checks on a finished run's saved answers (after a check changed). The model's
     answers, timings and settings stay as they were; results.jsonl, the summary and review.csv are rewritten."""
-    cases = {c["id"]: c for split in scoring.SPLITS for c in scoring.load_cases(split=split)}
+    meta = json.loads((folder / "summary.json").read_text(encoding="utf-8"))["meta"]
+    if meta.get("cases_file"):                            # a run on another test file (--cases)
+        cases = {c["id"]: c for c in scoring.load_case_file(Path(meta["cases_file"]))}
+    else:
+        cases = {c["id"]: c for split in scoring.SPLITS for c in scoring.load_cases(split=split)}
     with (folder / "results.jsonl").open(encoding="utf-8") as f:
         rows = [json.loads(line) for line in f]
     results = []
@@ -110,7 +115,6 @@ def rescore(folder: Path) -> None:
         results.append(scoring.result_row(cases[r["id"]], answer, r["ms"], r["tokens"], extra))
     with (folder / "results.jsonl").open("w", encoding="utf-8") as f:
         f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in results)
-    meta = json.loads((folder / "summary.json").read_text(encoding="utf-8"))["meta"]
     meta["rescored"] = time.strftime("%Y-%m-%d %H:%M")
     _write_summary(folder, results, meta)
 
@@ -123,15 +127,18 @@ def make_backend(args):
     if args.backend == "transformers":
         if not args.model:
             raise SystemExit("--model is required for the transformers backend")
+        sampling = backends.TransformersBackend.GREEDY if getattr(args, "greedy", False) else None
         return backends.TransformersBackend(args.model, device=args.device or "cuda", seed=args.seed,
-                                            max_new_tokens=args.max_new_tokens, adapter=args.adapter)
+                                            max_new_tokens=args.max_new_tokens, adapter=args.adapter, sampling=sampling)
     if args.backend == "llamacpp":
         if not args.model or not args.model.endswith(".gguf"):
             raise SystemExit("--model must be a .gguf file for the llamacpp backend")
         from engine.voice.cleanup_train.export import LLAMA_CPP
 
         server = args.llama_server or str(LLAMA_CPP / "bin" / "llama-server.exe")
-        return backends.LlamaCppBackend(args.model, server, seed=args.seed, max_new_tokens=args.max_new_tokens)
+        sampling = backends.LlamaCppBackend.GREEDY if getattr(args, "greedy", False) else None
+        return backends.LlamaCppBackend(args.model, server, seed=args.seed, max_new_tokens=args.max_new_tokens,
+                                        sampling=sampling)
     return backends.FakeBackend()
 
 
@@ -146,6 +153,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--llama-server", help="llama-server.exe (llamacpp); default: the one in downloads/llama.cpp/")
     p.add_argument("--prompt", default="v1_plain", help="prompt version in prompts/ (not used by current)")
     p.add_argument("--split", choices=list(scoring.SPLITS), default="dev")
+    p.add_argument("--cases", type=Path, help="score every case of another file in testset.csv's layout instead, "
+                                              "e.g. data/cleanup_train/big1_test.csv")
+    p.add_argument("--greedy", action="store_true", help="always the most likely token, no sampling")
     p.add_argument("--device", help="cuda (default) or cpu")
     p.add_argument("--seed", type=int, default=1234)
     p.add_argument("--max-new-tokens", type=int, default=256)
@@ -159,16 +169,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not args.backend:
         p.error("--backend is required (or --rescore)")
-    if args.split == "holdout":
+    if args.split == "holdout" and not args.cases:
         print("WARNING: running the HOLDOUT split. Use it only to report results after the pass bar is set, "
               "never to tune prompts or train.")
-    cases = scoring.load_cases(split=args.split)
+    cases = scoring.load_case_file(args.cases) if args.cases else scoring.load_cases(split=args.split)
     if args.limit:
         cases = cases[:args.limit]
     prompt = None if args.backend == "current" else load_prompt(args.prompt)
     backend = make_backend(args)
+    label = backend.model_label + ("-greedy" if args.greedy else "")
+    split = f"cases:{args.cases.stem}" if args.cases else args.split
     try:
-        folder = run(backend, cases, prompt, args.out, split=args.split)
+        folder = run(backend, cases, prompt, args.out, model_label=label, split=split, cases_file=args.cases)
     finally:
         getattr(backend, "close", lambda: None)()          # llamacpp: stop its server
     print(f"Done: {folder / 'summary.md'}")

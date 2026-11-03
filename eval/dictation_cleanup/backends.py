@@ -150,6 +150,7 @@ class TransformersBackend:
     # settings.json says so.
     QWEN35_SAMPLING = {"do_sample": True, "temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0,
                        "repetition_penalty": 1.0}
+    GREEDY = {"do_sample": False}                           # always the most likely token
     NOT_APPLIED = {"presence_penalty": 1.5}
 
     def __init__(self, model: str, device: str = "cuda", seed: int = 1234, max_new_tokens: int = 256,
@@ -266,12 +267,14 @@ class LlamaCppBackend:
     name = "llamacpp"
     SAMPLING = {"temperature": 0.7, "top_k": 20, "top_p": 0.8, "min_p": 0.0, "repeat_penalty": 1.0,
                 "samplers": ["temperature", "top_k", "top_p", "min_p"]}
+    GREEDY = {"top_k": 1, "repeat_penalty": 1.0, "samplers": ["top_k"]}          # only the most likely token
     NOT_APPLIED = {"presence_penalty": 1.5}               # as in TransformersBackend, so the runs compare
 
     def __init__(self, gguf: str, server: str, tokenizer: str = "Qwen/Qwen3.5-4B", seed: int = 1234,
-                 max_new_tokens: int = 256, ctx: int = 4096) -> None:
+                 max_new_tokens: int = 256, ctx: int = 4096, sampling: dict | None = None) -> None:
         self.gguf, self.server, self.tokenizer_id = gguf, server, tokenizer
         self.seed, self.max_new_tokens, self.ctx = seed, max_new_tokens, ctx
+        self.sampling = dict(self.SAMPLING if sampling is None else sampling)
         self._tok = self._template = self._proc = self._url = self._log = None
         self._version = self._gpu_before = None
         import urllib.request
@@ -288,7 +291,7 @@ class LlamaCppBackend:
                 "gguf_gb": round(size / 1e9, 2) if size else None, "server": self.server,
                 "server_version": self._version, "tokenizer": self.tokenizer_id, "ctx": self.ctx,
                 "gpu_layers": "all (-ngl 99)", "seed": self.seed, "seed_rule": "sent with every case",
-                "max_new_tokens": self.max_new_tokens, "sampling": self.SAMPLING, "enable_thinking": False,
+                "max_new_tokens": self.max_new_tokens, "sampling": self.sampling, "enable_thinking": False,
                 "prompt_sent_as": "token ids from the Hugging Face tokenizer",
                 "card_settings_not_applied": self.NOT_APPLIED,
                 "peak_gpu_gb_measure": "nvidia-smi, whole card: in use at the end of the run minus before the server"}
@@ -339,7 +342,7 @@ class LlamaCppBackend:
                                                   enable_thinking=False)
         ids = self._tok(text, add_special_tokens=False)["input_ids"]
         r = self._post("/completion", {"prompt": ids, "n_predict": self.max_new_tokens, "seed": self.seed,
-                                       "cache_prompt": True, "stream": False, **self.SAMPLING})
+                                       "cache_prompt": True, "stream": False, **self.sampling})
         cut_off = r.get("stop_type") == "limit" or bool(r.get("truncated"))
         return r["content"], r.get("tokens_predicted"), cut_off, r.get("timings") or {}
 
