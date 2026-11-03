@@ -39,7 +39,7 @@ The app waits at most `rewrite_wait_s` = 1.5 s for the quick clean-up after "yes
 ## 3. Human review and the pass bar
 
 - Blind sheet: `eval/dictation_cleanup/reviews/2026-11-02_dev.csv`, 134 rows: today's app and Qwen3.5-4B v3, labelled A and B at random per case. Khang and Khoi fill in `y`/`n` for "meaning kept" and "nothing invented", and flag bad test cases under `case_looks_wrong`. Then `review_sheet score`. Limit: only the new model can show "[or: …]" and "[marked unsure]", so a reviewer can sometimes guess which output is which.
-- **Pass bar: agreed by Khang on 2026-11-02** (DECISIONS.md has the full text). On the 33 holdout cases, with Khang and Khoi agreeing one answer per case:
+- **Pass bar: agreed by Khang on 2026-11-02** (DECISIONS.md has the full text). On the 33 holdout cases, scored by Khang (alone for now; Khoi is on other work):
   1. Serious invented facts (numbers, dates and times, names, places, amounts, negations): **0**.
   2. Clean controls changed: **at most 1 of 5**, and the change keeps the meaning.
   3. Ambiguous cases resolved silently: **at most 1 of 5**.

@@ -82,6 +82,10 @@ Agreed before anyone has run the holdout. It replaces the draft under "Proposed"
 The holdout is run once, with the final dev-tuned candidate, after the dev review. With 33 cases one case is 3 points: this is a go/no-go for building, not a number to publish.
 Decided by: Khang (Q4: A, after comparing "never" with "allowed if marked unsure").
 
+**2026-11-02. Khang reviews the clean-up outputs alone, for now.**
+Khoi is on other work. Khang fills in the `_Khang` columns of the review sheets for dev and holdout, and the `_Khoi` columns stay empty. This replaces "scored by Khang and Khoi, who agree one answer per case" in the pass bar above; everything else in the bar stays. The README's two-reviewer rule is paused, so there is no check on one person's judgement: the sheets stay blind (A/B in random order) to limit bias. A second reviewer can join later without changing the sheets.
+Decided by: Khang.
+
 ---
 
 ## Proposed, not yet agreed
