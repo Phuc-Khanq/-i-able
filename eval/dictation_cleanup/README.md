@@ -47,6 +47,27 @@ Numbers to report per model, per category: pass rate, plus three safety rates th
 
 The bar for "good enough" is not set yet. Set it after we see the baseline, and write it down before looking at holdout results.
 
+## How to run it
+
+Close the engine first (one heavy job on the 16 GB card). Commands from the repo root:
+
+```powershell
+.\.venv\Scripts\python.exe -m eval.dictation_cleanup.run --backend current                      # today's clean-up (baseline)
+.\.venv\Scripts\python.exe -m eval.dictation_cleanup.run --backend transformers --model Qwen/Qwen3.5-4B --prompt v2_full
+.\.venv\Scripts\python.exe -m eval.dictation_cleanup.run --backend fake --limit 5               # no GPU: checks the runner
+```
+
+Each run writes `runs/<date>_<model>_<prompt>/` (git-ignored): `summary.md` (the automatic checks, safety rates, latency), `results.jsonl`, `review.csv`, `settings.json`. Prompts are versioned files in `prompts/`; add a new version instead of editing an old one.
+
+For the human checks, build one blind sheet from two runs. Outputs are labelled A and B in a random order per case, and the key file says which run wrote which:
+
+```powershell
+.\.venv\Scripts\python.exe -m eval.dictation_cleanup.review_sheet build eval\dictation_cleanup\runs\<run A> eval\dictation_cleanup\runs\<run B> --name <date>_dev
+.\.venv\Scripts\python.exe -m eval.dictation_cleanup.review_sheet score eval\dictation_cleanup\reviews\<date>_dev.csv
+```
+
+Fill in `y` or `n` for each check, and anything odd about the case itself under `case_looks_wrong`. Don't open the `_key.csv` file until you're done.
+
 ## Limits (be honest about these)
 
 - Claude drafted these cases. The mishearings are plausible Whisper errors, not recorded ones, and the broken sentences are our guesses about how real users write. They have not been checked by people with speech or language differences.

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eval.dictation_cleanup import backends, run, scoring
+from eval.dictation_cleanup import backends, review_sheet, run, scoring
 from eval.dictation_cleanup.prompt_files import load_prompt
 
 
@@ -195,8 +195,15 @@ class TestPrompts(unittest.TestCase):
         user = load_prompt("cleanup_v1_full").messages(case(asr_best="Hi"))[1]["content"]
         self.assertIn("(none)", user)
 
+    def test_v2_without_alternatives_leaves_them_out(self):
+        c = case(asr_best="I need to by milk", asr_alt1="I need to buy milk", personal_words="Khoa")
+        user = load_prompt("v2_noalts").messages(c)[1]["content"]
+        self.assertNotIn("I need to buy milk", user)
+        self.assertIn("Khoa", user)
+        self.assertIn("I need to buy milk", load_prompt("v2_full").messages(c)[1]["content"])
+
     def test_prompts_ask_for_the_json_answer(self):
-        for name in ["v1_plain", "v1_full"]:
+        for name in ["v1_plain", "v1_full", "v2_full", "v2_noalts"]:
             system = load_prompt(name).system
             for key in ['"text"', '"alternatives"', '"uncertain"']:
                 self.assertIn(key, system)
@@ -301,6 +308,58 @@ class TestRunner(unittest.TestCase):
             b = run.run(backends.FakeBackend(), scoring.load_cases()[:1], load_prompt("v1_plain"), Path(tmp),
                         model_label="fake", log=lambda *a: None)
             self.assertNotEqual(a, b)
+
+
+class TestReviewSheet(unittest.TestCase):
+    def make_runs(self, tmp: Path) -> list[Path]:
+        cases = scoring.load_cases()[:4]
+        a = run.run(backends.FakeBackend(), cases, load_prompt("v1_plain"), tmp / "runs", model_label="fake",
+                    log=lambda *x: None)
+        b = run.run(backends.FakeBackend({"M01": '{"text": "Thursday at two.", "alternatives": [], "uncertain": false}'}),
+                    cases, load_prompt("v1_plain"), tmp / "runs", model_label="other", log=lambda *x: None)
+        return [a, b]
+
+    def read(self, path: Path) -> list[dict]:
+        with path.open(encoding="utf-8-sig", newline="") as f:
+            return list(csv.DictReader(f))
+
+    def test_build_is_blind_and_the_key_says_which_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            runs = self.make_runs(tmp)
+            sheet = review_sheet.build(runs, "t", out_dir=tmp / "reviews", split="dev")
+            rows, key = self.read(sheet), self.read(sheet.with_name("t_key.csv"))
+            self.assertEqual(len(rows), 8)                                 # 4 cases x 2 runs
+            self.assertEqual({r["output_id"][-1] for r in rows}, {"A", "B"})
+            self.assertNotIn("run", rows[0])                               # the sheet doesn't say which run
+            self.assertEqual({k["run"] for k in key}, {r.name for r in runs})
+            self.assertTrue(all(r[f"meaning_kept_{who}"] == "" for r in rows for who in review_sheet.REVIEWERS))
+
+    def test_score_counts_answers_per_run_and_reviewer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            runs = self.make_runs(tmp)
+            sheet = review_sheet.build(runs, "t", out_dir=tmp / "reviews", split="dev")
+            rows = self.read(sheet)
+            for r in rows:                                                  # Khang: all yes; Khoi: one "no"
+                r.update({"meaning_kept_Khang": "y", "nothing_invented_Khang": "yes",
+                          "meaning_kept_Khoi": "n" if r["output_id"] == "M01-A" else "y", "nothing_invented_Khoi": "y"})
+            with sheet.open("w", encoding="utf-8-sig", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=review_sheet.SHEET_COLUMNS)
+                w.writeheader()
+                w.writerows(rows)
+            result = review_sheet.score(sheet)
+            self.assertEqual(sum(s["outputs"] for s in result.values()), 8)
+            khoi_meaning = sum(s["Khoi"]["meaning_kept"][0] for s in result.values())
+            self.assertEqual(khoi_meaning, 7)
+            disagreements = [d for s in result.values() for d in s["disagree"]]
+            self.assertEqual(disagreements, ["M01-A meaning_kept"])
+            self.assertIn("Full pass", review_sheet.render_score(result))
+
+    def test_unknown_answers_are_not_counted(self):
+        self.assertIsNone(review_sheet._answer("maybe"))
+        self.assertTrue(review_sheet._answer(" Y "))
+        self.assertFalse(review_sheet._answer("no"))
 
 
 if __name__ == "__main__":
