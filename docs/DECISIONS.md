@@ -175,6 +175,17 @@ Replaces the open PyAV point above for the app. `engine/voice/whisper_import.py`
 Evidence (Khang's PC, 2026-11-03): with the real PyAV made impossible to import, the engine's dictation code transcribed a synthetic clip correctly ("Please send the report to my manager before Friday.", Whisper large-v3-turbo, CPU int8, 10.8 s) and no FFmpeg, x264 or x265 library was loaded; with PyAV installed the engine still doesn't load it; a pip dry run of a fresh install from the lock file fetches 85 packages, none of them PyAV; `tests/test_whisper_import.py`. Not yet done: a real fresh install on a clean PC.
 Decided by: Khang ("try it"), built by Claude.
 
+**2026-11-03. big1, trained on the big data set, is the clean-up candidate in place of full1.**
+big1: LoRA on Qwen3.5-4B, 7,125 training examples from `bigset.py`, 2 epochs, 162.9 min on the 5080 (peak 9.65 GB). Both models run as the app would (llama.cpp Q8_0, greedy, 5080):
+- big1 test, 2,500 cases, automatic: big1 2,441 (97.6%), full1 2,389 (95.6%). Silent guesses 0/380 vs 14/380, clean sentences changed 4/378 vs 6/378, broken answers 0 vs 1, p90 338 vs 345 ms.
+- The same 150 random cases, full pass by Khang's rule (Claude): big1 141 (94%), full1 132 (88%).
+- Dev, 67 hand-written cases, full pass by Khang's rule (Claude): big1 63 (94%), full1 61 (91%). Invented 0 in both.
+- New weak spots: "medic care" -> Medicaid in all 3 Medicare cases (the guard blocks them), and "fifteend of March" -> "end of March" (the guard misses it).
+Limit: the 2,500 come from the same generator as big1's training data, and dev is small and tuned on, so the human-written hidden set decides. After one epoch big1 was already ahead (2,430 automatic); the 2-epoch adapter is the candidate.
+The real app backend on the 5080, through the Rewriter: p50/p90 280/309 ms, 4.8 GB, the server restarts after a crash in 2.9 s and is gone after close() or a hard kill. First start 50 s, because the repo is on a USB hard disk (D:).
+Evidence: `eval/dictation_cleanup/reviews/2026-11-03_big1_vs_full1.md`, `..._dev_big1_score.md`, `docs/plans/2026-11-03_cleanup_app_integration.md` ("Measured on the reference machine"); run folders `runs/2026-11-03_big1-*`.
+Decided by: measured by Claude in the run Khang approved; switching the app's default model file is Khang's call (Proposed, below).
+
 ---
 
 ## Proposed, not yet agreed
@@ -186,3 +197,5 @@ Decided by: Khang ("try it"), built by Claude.
 - (2026-11-02) The pass bar for the clean-up holdout run: 0 invented facts, 0 of 5 clean controls changed, 0 of 5 ambiguous cases resolved silently, 0 main readings that flip a negation or change a number, name or date, 0 broken answers, full human pass at least 27 of 33 and at least 15 points above today's app, p90 at most 1.5 s on the 5080 for the quick clean-up (6 s for the refine only). Details: `docs/plans/2026-11-02_dictation_cleanup_plan.md`, section 3. The holdout is not run until this is agreed.
 - (2026-11-02) Run the new clean-up on llama.cpp with 4-bit GGUF files for speed and GPU memory (plan, section 2).
 - (2026-11-03) The clean-up runs in llama.cpp with the Q8_0 file on NVIDIA GPUs (no measurable loss against bf16, 4.5 GB, p90 0.38 s on the 5080) and greedy decoding (the same answer every time for the same words; 61/67 on dev, inside the 59 to 62 of the sampled runs). Q4_K_M (2.7 GB, 61/67 sampled) where memory is tight, once timed on a low-end laptop.
+- (2026-11-03) The app's default model file (`rewrite_gguf` in `engine/config.py`) changes from full1 to big1 Q8_0 (`checkpoints/cleanup/big1/gguf/big1-q8_0.gguf`), until the hidden test says otherwise.
+- (2026-11-03) Two guard fixes found in the GPU test: a word-list word must sound like something that was heard (full1 added "of sertraline" from the list), and a misspelled number word counts as a number ("thowsand", "fifteend"), so it's neither blocked nor lost. Measured on the 2,500 before it goes in.

@@ -85,6 +85,37 @@ CPU or Vulkan builds for laptops) and the model file (Q8_0 4.5 GB, Q4_K_M 2.7 GB
    - quit the demo and check Task Manager: no `llama-server.exe` left running.
 5. To go back: remove the line (or set it to "transformers").
 
+## Measured on the reference machine (2026-11-03, evening)
+
+The Rewriter with `rewrite_backend = "llamacpp"`, as the engine runs it: a real llama-server on the 5080, nothing else
+on the GPU, 10 dictation-like phrases three times each, then the refine, a killed server, and close(). Not with the
+camera, mic or Whisper running.
+
+| | full1 Q8_0 | big1 Q8_0 |
+| --- | --- | --- |
+| First start, until the server answers | 47.9 s | 49.8 s |
+| Quick clean-up, 30 calls, p50 / p90 / max | 269 / 326 / 448 ms | 280 / 309 / 322 ms |
+| Refine, one passage | 349 ms | 367 ms |
+| GPU memory added (nvidia-smi, whole card) | 4.8 GB | 4.8 GB |
+| Server killed: next clean-up restarts it | 2.9 s, answer used | 2.9 s, answer used |
+| After close(): llama-server left / GPU memory | none / back to 1.58 GB | none / back to 1.58 GB |
+
+- **Slow first start: the repo is on D:, a USB hard disk** (StoreJet). The 4.5 GB file reads at about 90 MB/s. The
+  restart with the file in Windows' cache took 2.9 s. Until the model is ready, dictation still types: the card waits
+  `rewrite_wait_s` and then uses the words as heard (that's how the code reads; I didn't try it). For the demo, start
+  the engine once beforehand, or keep the model file on the C: NVMe drive and give its full path in
+  `config.local.json` (`"rewrite_gguf": "C:/.../big1-q8_0.gguf"`). The NVMe start isn't measured.
+- **Engine killed hard** (TerminateProcess, as from a crash or Task Manager): llama-server went with it (Windows job
+  object), checked with a child process that started the server.
+- **The guard let an invented word through.** full1 turned "please let doctor oh car for know the new dose makes me
+  dizzy" (word list "Dr. Okafor, sertraline") into "...the new dose **of sertraline** makes me dizzy". It passed
+  because a word-list word never counts as invented, and a lowercase word isn't checked as a name. big1 didn't add
+  it. To fix in the guard: a word-list word must sound like something that was heard ("oh car for" -> Okafor).
+- Blocked, as designed: "Thursday at to o'clock" -> "two o'clock" (no other hearing to back the number). Blocked
+  wrongly: "five thowsand dollers" -> "five thousand dollars": the guard doesn't read "thowsand" as a number. The
+  same gap let big1's "the fifteend of March" -> "the end of March" through on the test set
+  (`eval/dictation_cleanup/reviews/2026-11-03_big1_vs_full1.md`).
+
 ## GPU memory
 
 Q8_0 takes about 5 GB (nvidia-smi, whole card) against 6.3 GB for today's Qwen2.5-3B, so the `full` profile
