@@ -90,6 +90,10 @@ Decided by: Khang.
 Rule, in Khang's words, roughly: filler, repeats and changes of mind can go; the output passes if it carries the main ideas of what the person wanted to say, as complete enough sentences, polite and meaningful. The exact order and structure don't matter. Khang filled in "meaning kept" for the dev sheet himself (2026-11-02_dev). Claude filled in "nothing invented" for that sheet: every row's notes say so. From now on Claude fills in both checks with this rule, and Khang spot-checks and has the final say. Risk: an AI is then judging an AI. Keep the sheets blind, and Khang should spot-check the "n" answers and the cases where Claude and the automatic checks disagree.
 Decided by: Khang.
 
+**2026-11-02. Prompt v4 replaces v3 as the clean-up candidate.**
+v4 (`prompts/cleanup_v4_full.txt`) is v3 plus: never leave a fragment or broken word order as it is, write complete, polite sentences; a bare instruction becomes a polite request; "even a real word" can be a mishearing; two made-up examples (laundry, umbrella). Dev only, Qwen3.5-4B, same settings. Dev review (Claude, Khang's rule; unchanged outputs keep Khang's v3 answers): full pass 59/67 (88%) vs v3 53/67 (79%) and the app 17/67 (25%); automatic 63/67; silent guesses 2/10; p90 2.45 s. New weak spots: X02 invented "tomatoes", M08 (search query made into an odd question), A07 ("Please" added to a clean sentence). Holdout note: while picking example words, a grep of `testset.csv` printed four holdout rows (M30, S06, S24, X06: keys, a movie time, keys, a window); the examples avoid those topics. Tuning stops at v4; next is the holdout run, once.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-02_dev_v4_score.md`, run folder `runs/2026-11-02_Qwen3.5-4B_cleanup_v4_full`. Decided by: Claude (Khang asked for v4); Khang to confirm before the holdout.
+
 ---
 
 ## Proposed, not yet agreed

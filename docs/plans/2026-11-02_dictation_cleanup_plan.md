@@ -4,19 +4,21 @@ Status: **draft, waiting for Khang's OK.** Nothing in the app has changed. Writt
 
 ## 1. Where we are
 
-| Dev, 67 cases, automatic checks | App today (Qwen2.5-3B) | 4B v1 full | 4B v2 full | 4B v2, no alternatives | **4B v3 full** |
-| --- | --- | --- | --- | --- | --- |
-| Pass | 46/67 | 63/67 | 60/67 | 55/67 | **62/67** |
-| mispronounced / broken / mixed | 13 / 19 / 3 | 19 / 19 / 5 | 18 / 20 / 6 | 18 / 20 / 5 | 18 / 20 / 6 |
-| ambiguous / clean controls | 1 / 10 | 10 / 10 | 6 / 10 | 2 / 10 | 8 / 10 |
-| Over-edit (clean controls) | 0/10 | 0/10 | 0/10 | 0/10 | 0/10 |
-| Silent guess (ambiguous) | 8/10 | 0/10 | 4/10 | 8/10 | 2/10 |
-| Possible invented facts | 1 | 0 | 0 | 1 | 0 |
-| Latency p50 / p90 / p99 (ms) | 435 / 573 / 748 | 1864 / 2205 / 2546 | 2017 / 2304 / 2548 | 1989 / 2296 / 2470 | 2122 / 2589 / 2878 |
+| Dev, 67 cases, automatic checks | App today (Qwen2.5-3B) | 4B v1 full | 4B v2 full | 4B v2, no alternatives | 4B v3 full | **4B v4 full** |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pass | 46/67 | 63/67 | 60/67 | 55/67 | 62/67 | **63/67** |
+| mispronounced / broken / mixed | 13 / 19 / 3 | 19 / 19 / 5 | 18 / 20 / 6 | 18 / 20 / 5 | 18 / 20 / 6 | 18 / 20 / 7 |
+| ambiguous / clean controls | 1 / 10 | 10 / 10 | 6 / 10 | 2 / 10 | 8 / 10 | 8 / 10 |
+| Over-edit (clean controls) | 0/10 | 0/10 | 0/10 | 0/10 | 0/10 | 0/10 |
+| Silent guess (ambiguous) | 8/10 | 0/10 | 4/10 | 8/10 | 2/10 | 2/10 |
+| Possible invented facts | 1 | 0 | 0 | 1 | 0 | 0 |
+| Latency p50 / p90 / p99 (ms) | 435 / 573 / 748 | 1864 / 2205 / 2546 | 2017 / 2304 / 2548 | 1989 / 2296 / 2470 | 2122 / 2589 / 2878 | 2036 / 2449 / 2889 |
 
 All "4B" runs are Qwen3.5-4B, transformers, bf16, thinking off, seed 1234, one warm-up first. Run folders are in `eval/dictation_cleanup/runs/` (git-ignored); all were rescored with the same checks.
 
-- **v3 is the candidate.** v1 scored one more automatic pass, but it left broken sentences broken, kept repeating the misheard original as an "alternative", and in A05 put "I can't go on Friday" first when the person said "I can go on Friday". v2 and v3 write real sentences ("The meeting is not on Tuesday; it is on Wednesday."), apply self-corrections, and keep the heard reading first when unsure. v3 fixed most of v2's silent guesses. Tuning stopped at v3 so the prompt doesn't get fitted to the 67 dev cases.
+- **Human review, dev (meaning kept / nothing invented / full pass):** app 26 / 66 / 17 of 67 (25%); v3 57 / 67 / 53 (79%); **v4 63 / 66 / 59 (88%)**. v3's misses were short broken sentences left curt ("Tomorrow doctor appointment cancel."). v4 = v3 plus "never leave a fragment; write complete, polite sentences" and two made-up examples. v4's new problems: X02 invented "tomatoes" ("store" became "store tomatoes"; the automatic check doesn't catch common nouns), M08 turned a search query into an odd question, A07 added "Please" to a clean sentence (fails the automatic "unchanged" check). v4 filled in by Claude with Khang's rule (DECISIONS.md); sheets `reviews/2026-11-02_dev_v4*`.
+- **v4 is now the candidate** (replaces v3). Earlier note:
+- **v3 was the candidate.** v1 scored one more automatic pass, but it left broken sentences broken, kept repeating the misheard original as an "alternative", and in A05 put "I can't go on Friday" first when the person said "I can go on Friday". v2 and v3 write real sentences ("The meeting is not on Tuesday; it is on Wednesday."), apply self-corrections, and keep the heard reading first when unsure. v3 fixed most of v2's silent guesses. Tuning stopped at v3 so the prompt doesn't get fitted to the 67 dev cases.
 - **What the alternatives are worth:** without them (v2, no alternatives) the model still fixed 18 of 20 misheard words from the sentence and context alone, but it resolved 8 of 10 ambiguous cases silently, and once it read a negation into a misspelling: "Cansel doctor appoinment tomorow" became "I can't cancel the doctor appointment tomorrow." The invented-fact check caught it; the app's guard must too.
 - **Still failing in v3:** M25 writes "eyeable" instead of "[eye]able"; M16 and X05 offer the right reading only as the second choice (safe, but not fixed); A04 and A08 kept the heard words without flagging the other reading.
 - **Holdout honesty note:** during the first look at `testset.csv` (before any tuning), a printout showed a few holdout rows, among them a number ambiguity (A03). So no number example was added to the prompts.
