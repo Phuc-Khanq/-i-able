@@ -75,8 +75,9 @@ class Dictation:
             if s is None:
                 from engine.config import settings as s
             load_torch_first(s.whisper_device)
-            from faster_whisper import WhisperModel  # heavy: import only when used (rule 6)
+            from engine.voice.whisper_import import faster_whisper   # heavy: import only when used (rule 6)
 
+            WhisperModel = faster_whisper().WhisperModel     # without PyAV's GPL codecs (whisper_import.py)
             name = resolve_model(s.whisper_model)
             kwargs = dict(device=s.whisper_device, compute_type=s.whisper_compute_type)
             try:

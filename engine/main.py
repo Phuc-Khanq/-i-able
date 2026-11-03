@@ -29,6 +29,11 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 
+# PyAV ships GPL codecs and the engine never needs it: a stand-in, before anything heavy can import the real one
+from engine.voice.whisper_import import block_av
+
+block_av()
+
 from engine.config import settings
 from engine.core import messages, topics
 from engine.core.events import EventBus, WebSocketRelay

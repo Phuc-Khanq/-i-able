@@ -170,6 +170,11 @@ Decided by: Claude, in step 2 of the app plan that Khang approved; Khang to conf
 - Closed: Silero VAD is MIT (LICENSE file and README on GitHub, checked 2026-11-03); the "CC BY-NC 4.0" was the hover text of a badge that reads MIT.
 Not legal advice. Decided by: scan by Claude at Khang's request; what to do about PyAV is Khang's call with the lawyer.
 
+**2026-11-03. The app runs without PyAV.**
+Replaces the open PyAV point above for the app. `engine/voice/whisper_import.py` gives faster-whisper a stand-in for `av` (it only needs the real one to decode audio files; the engine always passes samples), `engine/main.py` sets it up before anything heavy loads (torchvision imports `av` too), the installers (`scripts/setup.ps1`, `scripts/install.ps1`) add faster-whisper 1.2.1 with `--no-deps`, and `av` and faster-whisper are out of `requirements.lock.txt` (its other dependencies, ctranslate2 and onnxruntime, are listed in `requirements.txt`). Training keeps PyAV (`requirements-train.txt`, TORGO files) and is never shipped.
+Evidence (Khang's PC, 2026-11-03): with the real PyAV made impossible to import, the engine's dictation code transcribed a synthetic clip correctly ("Please send the report to my manager before Friday.", Whisper large-v3-turbo, CPU int8, 10.8 s) and no FFmpeg, x264 or x265 library was loaded; with PyAV installed the engine still doesn't load it; a pip dry run of a fresh install from the lock file fetches 85 packages, none of them PyAV; `tests/test_whisper_import.py`. Not yet done: a real fresh install on a clean PC.
+Decided by: Khang ("try it"), built by Claude.
+
 ---
 
 ## Proposed, not yet agreed

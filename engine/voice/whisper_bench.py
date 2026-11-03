@@ -61,8 +61,9 @@ def main() -> int:
     parser.add_argument("--mic", type=int, default=None, help="mic number from 'python -m sounddevice'")
     args = parser.parse_args()
 
-    from faster_whisper import WhisperModel
+    from engine.voice.whisper_import import faster_whisper
 
+    WhisperModel = faster_whisper().WhisperModel           # without PyAV, as the engine runs it
     before_mb = gpu_memory_used_mb()
     t0 = time.perf_counter()
     try:

@@ -112,9 +112,9 @@ def download(settings, log=print) -> None:
             continue
         log(f"Downloading {name} (once; later runs load it from disk) ...")
         if kind == "whisper":
-            from faster_whisper.utils import download_model
+            from engine.voice.whisper_import import faster_whisper
 
-            download_model(name)
+            faster_whisper().utils.download_model(name)        # without PyAV (engine/voice/whisper_import.py)
         else:
             from huggingface_hub import snapshot_download
 

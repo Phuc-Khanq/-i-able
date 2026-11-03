@@ -90,6 +90,8 @@ if ($useGpu) {
 }
 Step "[eye]able's packages (exact versions from the demo PC)"
 & $uv pip install --python $py -r requirements.lock.txt; Check "install packages"
+# Without its dependency PyAV, which ships GPL codecs the engine never uses (docs/licences/2026-11-03_python_packages.md)
+& $uv pip install --python $py --no-deps faster-whisper==1.2.1; Check "install faster-whisper (without PyAV)"
 
 Step "MediaPipe face model"
 New-Item -ItemType Directory -Force models | Out-Null
@@ -99,7 +101,7 @@ if (-not (Test-Path "models\face_landmarker.task")) {
 Write-Host "models\face_landmarker.task ready"
 
 Step "Checking the packages load"
-& $py -c "import cv2, mediapipe, numpy, faster_whisper, sounddevice, rapidfuzz, pynput, mss, websockets, tkinter; print('All imports OK')"; Check "imports"
+& $py -c "from engine.voice.whisper_import import faster_whisper; faster_whisper(); import cv2, mediapipe, numpy, sounddevice, rapidfuzz, pynput, mss, websockets, tkinter; print('All imports OK')"; Check "imports"
 
 # ---------------------------------------------------------------- 4. settings and models
 Step "Choosing what this PC runs"

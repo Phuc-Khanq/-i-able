@@ -35,6 +35,8 @@ if (Test-Path "requirements.lock.txt") {
 } else {
     Step "Install packages from requirements.txt" { & $py -m pip install -r requirements.txt }
 }
+# Without its dependency PyAV, which ships GPL codecs the engine never uses (docs/licences/2026-11-03_python_packages.md)
+Step "Install faster-whisper (without PyAV)" { & $py -m pip install --no-deps faster-whisper==1.2.1 }
 
 Write-Host "`n== Download the MediaPipe face model" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force models | Out-Null
@@ -45,6 +47,6 @@ if (-not (Test-Path "models\face_landmarker.task")) {
 # Front end, once Nhi has created ui/
 if (Test-Path "ui\package.json") { Step "Install front-end packages" { npm --prefix ui install } }
 
-Step "Check imports" { & $py -c "import cv2, mediapipe, numpy, sklearn, mss, pynput, transformers, faster_whisper, sounddevice, rapidfuzz, librosa, websockets; print('All imports OK')" }
+Step "Check imports" { & $py -c "from engine.voice.whisper_import import faster_whisper; faster_whisper(); import cv2, mediapipe, numpy, sklearn, mss, pynput, transformers, sounddevice, rapidfuzz, librosa, websockets; print('All imports OK')" }
 Step "Check GPU" { & $py -c "import torch; ok = torch.cuda.is_available(); print('CUDA available:', ok, torch.cuda.get_device_name(0) if ok else '(CPU only)')" }
 Write-Host "`nSetup done." -ForegroundColor Green

@@ -15,7 +15,13 @@ accelerate
 uiautomation==2.0.29; sys_platform == "win32"   # dwell: native buttons and text boxes count as clickable (optional)
 
 # Voice
-faster-whisper==1.2.1
+# faster-whisper==1.2.1 itself is installed with --no-deps by scripts/install.ps1 and setup.ps1: its own dependency,
+# PyAV, ships GPL codecs (docs/licences/2026-11-03_python_packages.md). These are its other dependencies:
+ctranslate2==4.8.3
+onnxruntime==1.31.0
+tokenizers
+huggingface_hub
+tqdm
 sounddevice
 silero-vad
 rapidfuzz

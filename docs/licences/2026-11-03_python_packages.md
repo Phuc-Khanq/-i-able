@@ -19,6 +19,15 @@ Ways out, cheapest first, all to decide with Khang and the lawyer:
    wrapper around faster-whisper's import.
 3. Keep it and comply with the GPL for those libraries (the lawyer's call).
 
+**Update, same day: way 2 is built** (Khang: "try it"). `engine/voice/whisper_import.py` puts a stand-in for `av`
+in place before faster-whisper loads (`engine/main.py` does it first thing, since torchvision imports `av` too);
+the installers add faster-whisper with `--no-deps`, and `av` is out of `requirements.lock.txt`. Checked on Khang's
+PC: with the real PyAV made impossible to import, the engine's dictation code transcribed a synthetic speech clip
+correctly (Whisper large-v3-turbo on the CPU) and no FFmpeg, x264 or x265 library was in the process; where PyAV is
+installed (training needs it) the engine still doesn't load it; a fresh install from the lock file fetches 85
+packages, none of them PyAV (pip dry run). Training (`requirements-train.txt`) still installs PyAV to read TORGO
+files; training is never shipped. Not yet run: a real fresh install on a clean PC.
+
 **Fine for a product we sell, with conditions (normal for commercial software):**
 - LGPL: `pynput` (LGPL-3.0), `soxr` (LGPL-2.1+), libsndfile inside `soundfile` (LGPL-2.1), FFmpeg inside `av` and
   `opencv-contrib-python` (LGPL). Keep them as separate, replaceable libraries (they are: separate packages and
