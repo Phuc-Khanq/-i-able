@@ -149,6 +149,19 @@ Evidence: `eval/dictation_cleanup/reviews/2026-11-03_dev_llamacpp_score.md` and 
 Khang wants one chat per job. `/start <task>` (`.claude/skills/start/`) begins a new session: it reads STATUS.md, the latest SESSION_LOG.md entries and git, then gives a short briefing and a plan. `/wrap-up` ends it. Recorded late, at the 2026-11-03 wrap-up.
 Decided by: Khang.
 
+**2026-11-03. The big clean-up data set: 10,000 examples, 2,500 of them a test set, split by sentence.**
+Khang asked for 10,000 examples with 2,500 for testing, more fields than daily life, and the categories as in today's test set. `engine/voice/cleanup_train/bigset.py` builds them from 42 field banks (`fields_*.py`: 1,353 sentences written by Claude, 300+ field terms with how a recognizer mishears them, pairs with two meanings) plus the older seeds (training only: full1 saw them). Example kinds: already correct, messy, broken, a misheard term (the right word from the word list, the line before, another hearing, or only the sentence), a change of mind, cut off, two meanings (negation, number and name pairs), and two- or three-sentence passages.
+The split is by sentence: a sentence, and every misheard term, goes to one side only (a term goes to the same side in every field), template frames go by frame, and training examples within 0.6 token overlap of a test text are dropped. Checked: no test sentence or test mishearing is in training. Test mix: clean 15%, two meanings 15%, misheard 24%, broken 30%, mixed 15%. The test file uses the eval's layout (`run.py --cases`); the eval also gained `--greedy`.
+Baseline, full1 (llama.cpp Q8_0, greedy, 5080): 2,389/2,500 automatic (95.6%), p50/p90 294/345 ms. Hand check of 150 random cases by Khang's rule (Claude): 132/150 (88%, about ±5), so the automatic checks run about 7 points high. Failures: word-list words offered as alternatives or the wrong one picked (7), a misheard term guessed wrong or kept with only a weak hint (5), small words dropped and the meaning changed (6; two of these are unfair cases where the noise dropped "will" or "can"; fix in the next test set). Evidence: `eval/dictation_cleanup/reviews/2026-11-03_big1_test_sample_full1.md`.
+Limit: the test sentences are Claude-written, like the training ones; the human-written hidden set stays the real check.
+Decided by: Khang (size, split, fields); the build details by Claude.
+
+**2026-11-03. A guard of its own for the trained clean-up model (check_cleanup).**
+The app's guard (check_rewrite) rejects any reworded word, which would throw away most of what the trained model is for (fixing misheard words and broken sentences). `check_cleanup` (`engine/voice/rewrite.py`) is used only with `rewrite_backend = "llamacpp"`. It blocks a number, name or negation that nobody said (a name may come from the user's word list, or sound like what was heard: "medi cure" -> Medicare, but not Ann -> Dan), one that was said and is gone without a change of mind ("no", "sorry", "I mean", "wait" ...), or most of the said words gone (a dropped sentence, or a different one).
+Measured on full1's 2,500 test answers: it blocks 13. At least 6 are real failures (a different sentence written, two dropped sentences, an invented "until Monday", essay -> thesis), about 6 were good answers (W-2, EpiPen, nonprofit: 0.25% of the good answers), and those fall back to the user's own words without fillers. It catches none of the 18 failures of the hand-checked sample: those are wrong meanings, which no word rule sees. The preview and confirm step stays the safety net.
+Without other hearings (the app has none until the contract change), a homophone number fix ("to o'clock" -> "two o'clock") is blocked: numbers never change without evidence.
+Decided by: Claude, in step 2 of the app plan that Khang approved; Khang to confirm.
+
 ---
 
 ## Proposed, not yet agreed

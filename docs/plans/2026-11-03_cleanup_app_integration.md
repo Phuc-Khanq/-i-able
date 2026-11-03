@@ -1,7 +1,8 @@
 # Plan: the trained clean-up model in the app
 
-Status: **draft for Khang's OK** (2026-11-03). Nothing here is built yet. Steps 3 and 4 change contract files and
-need his OK first (CLAUDE.md).
+Status (2026-11-03): steps 1 and 2 are built on branch `voice-cleanup-app` (Khang: "proceed"), tested with
+fakes; the run on the real GPU waits until big1's training ends. The default backend stays "transformers" until
+Khang has run the demo. Steps 3 and 4 change contract files and need his OK first (CLAUDE.md).
 
 ## Goal
 
