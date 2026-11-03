@@ -1,26 +1,22 @@
 # Status
 
-Last updated: 2026-11-02 18:31 (wrap-up). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-03 12:25 (wrap-up). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
-- **Dictation clean-up model switch.** Replace Qwen2.5-3B (research licence) with the Qwen3.5 family. Prompt-only Qwen3.5-4B is measured: with the full prompt it beats today's clean-up on the automatic checks, but it is about 4x slower. Human review of the outputs is next.
+- **Dictation clean-up: our own trained model.** full1, a LoRA adapter on Qwen3.5-4B (Apache 2.0) trained on Claude-written examples, is the candidate. Dev full pass 62/67 by Khang's rule, but dev is tuned on, so a fresh hidden test is next. In llama.cpp it answers in 0.33 s median (Q8_0), under the 1.5 s quick clean-up budget.
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
 ## Done recently
 
-- 2026-11-02: Qwen3.5-4B (thinking off, prompt only) on dev, 5080, automatic checks. Plain prompt: 53/67 pass, silent guess 8/10, p50/p90/p99 1710/1976/2168 ms. Full prompt: 63/67 pass, ambiguous 10/10, silent guess 0/10, over-edit 0/10, 0 invented, 0 broken JSON, p50/p90/p99 1864/2205/2546 ms, 8.74 GB peak GPU. Baseline for comparison: 46/67, p50 435 ms. Speed caveat: Qwen3.5's fast kernels (`flash-linear-attention`, `causal-conv1d`) aren't installed, so transformers used its slower reference code.
-- 2026-11-02: `/start` command (`.claude/skills/start/`): one session per job, started with `/start <task>`.
-
-- 2026-11-02: scoring runner in `eval/dictation_cleanup/` (`python -m eval.dictation_cleanup.run --help`), 34 tests. Baseline measured for today's clean-up (Qwen2.5-3B, dev, 5080): 46/67 automatic-check pass, over-edit 0/10, silent guess 8/10, guard rejected 21/67 (16 of those would have passed), p50/p90/p99 435/573/748 ms, 6.34 GB peak GPU. Run folder: `eval/dictation_cleanup/runs/2026-11-02_Qwen2.5-3B-Instruct_app/`.
-- 2026-11-02: old-name scan: 169 lines in about 60 files, plus about 60 file names (see SESSION_LOG.md, 18:31).
-
-- 2026-11-02: `/wrap-up` command (`.claude/skills/wrap-up/`) and `docs/SESSION_LOG.md`. Commits carry only the developer's name (CLAUDE.md, Git workflow).
-- 2026-11-02: moved to the private repo `Phuc-Khanq/-i-able` (remote `origin`): all 9 local branches and 5 tags pushed. The old public repo is now remote `public`. See DECISIONS.md.
-- 2026-11-02: setup files and test set committed on branch `voice-cleanup-eval` (from `main`). Local `voice` was 59 commits behind `main`, so it was left as it was.
-- 2026-11-02: `eval/dictation_cleanup/` created: 100 original test cases (30 mispronounced, 30 broken structure, 10 mixed, 15 ambiguous, 15 clean controls; 33 held out) and a README with the scoring rules. Drafted by Claude, not yet reviewed by Khang or Khoi.
-- 2026-11-02: Claude Code set up: `CLAUDE.md`, `.claude/rules/`, `.claude/settings.json`, this file, `docs/DECISIONS.md`.
+- 2026-11-03: full1 runs in llama.cpp (MIT, build b11960), 5080, dev: Q8_0 p50/p90/p99 328/378/412 ms (about 5.1 GB), Q4_K_M 264/292/332 (about 3.3 GB), bf16 488/565/603. With greedy decoding it gives the same answers as transformers on all 67 cases. Full pass by Khang's rule 59 to 62 across runs (sampling luck). `engine/voice/cleanup_train/export.py` makes the GGUF files; the eval runs them with `--backend llamacpp`.
+- 2026-11-03: first trained adapter full1: 1,088 examples, 32.7 min on the 5080 (peak 9.5 GB). Dev: automatic 64/67, silent guess 1/10, over-edit 0/10, 0 invented, human full pass 62/67 (93%); p50 1770 ms in transformers.
+- 2026-11-02: training pipeline `engine/voice/cleanup_train/`: Claude-written sentences, speech noise (stutters, fillers, restarts, misspellings), a leak check against the test set, LoRA trainer (peft). Pilot: 300 examples in 9.4 min, full pass 59/67. Training works on Windows with the slow reference kernels; WSL2 wasn't needed.
+- 2026-11-02: holdout, run once with prompt v4: fails the pass bar (full pass 22/33, silent guesses 4/5; today's app 7/33). The holdout is spent.
+- 2026-11-02: prompts v2 to v4 on dev (human full pass v3 53/67, v4 59/67; today's app 17/67); blind review sheets and `--rescore`; plan with the pass bar, agreed by Khang. Khang reviews alone; Claude fills the reviews with his "meaning kept" rule.
+- 2026-11-02: Qwen3.5-4B prompt-only on dev: v1 full prompt 63/67 automatic, p50 1864 ms (today's app 46/67, p50 435 ms).
+- 2026-11-02: `/start` and `/wrap-up` commands; scoring runner in `eval/dictation_cleanup/`; old-name scan (169 lines in about 60 files, about 60 file names); private repo `Phuc-Khanq/-i-able` (remote `origin`; the old public repo is remote `public`); Claude Code setup; test set of 100 cases (33 held out).
 - Earlier: hackathon build (head pointer, long-blink click, voice commands, dictation with preview and clean-up, click by name, website live demo, Windows installer, about 900 tests). See README.
 
 ## How the clean-up guard works today (`engine/voice/rewrite.py`)
@@ -33,29 +29,30 @@ Last updated: 2026-11-02 18:31 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## In progress
 
-- Nothing running. Three run folders in `eval/dictation_cleanup/runs/` wait for human review.
+- Nothing running. Waiting for the hidden test phrases.
 
 ## Next
 
-1. Khang and Khoi fill in the review sheets (`review.csv` in each run folder), starting with the Qwen3.5-4B full run, and review the test set. The automatic checks can't see meaning.
-2. Decide how the card shows the model's `alternatives`. In A05 the full prompt put "I can't go on Friday" first and the user's own words second, with `uncertain` false: the main reading flipped a negation.
-3. Speed: check the licences of `flash-linear-attention` and `causal-conv1d` and whether they install on Windows; then re-time. Then Qwen3.5-2B and 0.8B with the full prompt.
-3. Rename, once the exact name is given: display text first, then the voice command and file names, then the bigger renames (website folder, repo URL), each its own commit.
-4. Decide whether the app's guard should reject invented numbers (M01: "to o'clock" became "1 o'clock" and was accepted).
-5. Same set with Qwen3.5-2B and 0.8B; then time the light sizes on a low-end laptop (8 GB RAM, no NVIDIA GPU).
-6. Licence scan of all Python packages.
+1. Hidden test: Khang or Hung writes about 35 new phrases (`messy → meant`), spread over misheard words, broken sentences, changes of mind, two possible meanings and already-correct ones. Claude turns them into cases and runs full1 once, as it would ship (llama.cpp Q8_0, greedy, if Khang agrees).
+2. More training data for the cases that fail in every run (M16, M25, S28, X01), then a new adapter.
+3. App change (plan, section 4): llama-server behind the `Rewriter` interface (127.0.0.1, with an API key), the new guard, the card's alternatives; the refine first.
+4. Rename, once the exact name is given.
+5. Decide whether the app's guard should reject invented numbers (M01: "to o'clock" became "1 o'clock" and was accepted).
+6. Light models for weak laptops (Qwen3.5-2B, 0.8B; Q4_K_M or llama.cpp's CPU build), timed on a low-end laptop (8 GB RAM, no NVIDIA GPU).
+7. Licence scan of all Python packages.
 
 ## Blockers and risks
 
-- Qwen3.5 training uses custom kernels that may not work on Windows with the RTX 5080. Fallback: WSL2.
+- Dev is tuned on and the holdout is spent: only the fresh hidden set gives a number to trust.
 - The test cases were invented, not taken from real users. Real users or a speech-language pathologist should review them later.
+- For a lawyer: training on Claude-written sentences (Anthropic's terms forbid it only for competing products; Khang's reading: we don't compete); shipping NVIDIA's CUDA runtime DLLs with llama.cpp; the licence for new private code; IP agreements with everyone who wrote code.
 - Website updates: the live site is served from the public repo, and pushing `main` there would publish the private code. Pick a way to update it (e.g. a separate public repo holding only `eyeable-frontend/`). The Pages workflow will also fail in the private repo until it's switched off there.
-- Open for a lawyer: the licence for new private code, and IP agreements with everyone who wrote code.
 - Remove the two people who left from the old public repo's collaborators (Khang, on GitHub).
 
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
+- Git-ignored, only on this PC: training data (`data/cleanup_train/`), adapters and GGUF files (`checkpoints/cleanup/`, about 24 GB for full1; `merged/` and the bf16 GGUF can be rebuilt with export.py), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
 
 ## Ideas (not scheduled)

@@ -1,5 +1,34 @@
 # Session log (newest first)
 
+## 2026-11-03 12:25: Clean-up: prompt v4 and holdout, our own trained adapter (full1), llama.cpp speed
+Branch: voice-cleanup-eval · Commits (all pushed to origin): 1236445 docs: /start command for the beginning of a session; a78ca0b eval: record the model's cached revision in settings.json; ed7d62c docs: Qwen3.5-4B baseline results in STATUS; c33731e eval: clean-up prompt v2, full and without alternatives; 611e3d6 eval: blind review sheets for the human checks; b4c3ce0 eval: titles aren't names; --rescore re-runs the checks on saved answers; 781f0d6 eval: clean-up prompt v3; 5c44f4b eval: blind review sheet for dev, today's app vs Qwen3.5-4B v3; 153bf52 docs: plan for the new dictation clean-up, proposed pass bar; 371374e docs: pass bar for the clean-up holdout, agreed by Khang; 70053bd docs: Khang reviews the clean-up outputs alone for now; 9d0b9a9 eval: dev review filled in and scored; 2eea154 eval: prompt v4 (complete, polite sentences), dev run and review; eb97393 eval: holdout run, Qwen3.5-4B v4 vs today's app, does not meet the bar; 465c877 voice: clean-up training data (seeds, noise, leak check) and LoRA trainer; e9a7876 voice: more clean-up training data, template cases, per-epoch adapters, merged adapter in eval; be33365 eval: first trained clean-up adapter (pilot and full1) on dev, reviewed; 27ace4b voice: export a trained clean-up adapter to GGUF for llama.cpp; b0e9657 eval: llama.cpp backend for the clean-up runner; dda5faf eval: full1 in llama.cpp on dev, about 5x faster, same answers with greedy · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:**
+- Prompt-only Qwen3.5-4B pushed to its limit: prompts v2 to v4, blind review sheets, the pass bar (agreed by Khang). Khang reviews alone; Claude fills the reviews with his "meaning kept" rule.
+- Holdout run once with v4: no-go against the bar. The holdout is spent.
+- Training pipeline `engine/voice/cleanup_train/`: Claude-written everyday sentences, speech noise (stutters, fillers, restarts, misspellings), a leak check against the test set, LoRA trainer. Pilot and full1 trained overnight on the 5080.
+- full1 reviewed on dev: the best result so far and the new candidate.
+- llama.cpp b11960 downloaded (checksums verified); `export.py` makes GGUF files (merge, convert, Q8_0, Q4_K_M); the eval runs them with `--backend llamacpp`. 1,014 tests and the compile check pass.
+**Measured:** all on Khang's PC (RTX 5080), engine off, dev 67 cases unless noted; "full pass" is the human check by Khang's rule, filled by Claude:
+- Qwen3.5-4B prompt only: v1 full prompt 63/67 automatic, p50 1864 ms; full pass v3 53/67, v4 59/67 (p50/p90 2036/2449 ms); today's app 17/67.
+- Holdout, 33 cases: v4 full pass 22/33, silent guesses 4/5, p90 2465 ms; today's app 7/33.
+- Training: pilot 300 examples in 9.4 min; full1 1,088 examples in 32.7 min (387 steps, peak 9.5 GB).
+- full1 in transformers (merged): automatic 64/67, silent guess 1/10, over-edit 0/10, 0 invented, full pass 62/67; p50/p90/p99 1770/2070/2237 ms.
+- full1 in llama.cpp: Q8_0 328/378/412 ms (about 5.1 GB, nvidia-smi, whole card), Q4_K_M 264/292/332 (about 3.3 GB), bf16 488/565/603; full pass 59 (bf16, Q8_0) and 61 (Q4_K_M); greedy 61/67 in both engines.
+- Greedy llama.cpp bf16 gave the same answers as transformers on 67/67 cases; llama.cpp's tokenizer matches Hugging Face's on 67/67 prompts.
+**Decisions:** prompt v4 replaced v3; the holdout verdict (no-go); train our own adapter on Claude-written sentences (terms checked); full1 is the candidate; llama.cpp (MIT) runs it; one session per job with /start. All in DECISIONS.md. Proposed: Q8_0 with greedy decoding for the app.
+**Still running:** none
+**Problems / blockers:**
+- Dev is tuned on (data written after seeing its failures, epoch picked on it) and the holdout is spent: only a fresh hidden set gives a fair number.
+- Fail in every run: M16 (the right time only offered second), M25 ("eyeable" without brackets), S28 and X01 (broken word order; a bare order to a clinic).
+- `/wrap-up` didn't load as a command in this session (probably because it was added after the session started); its steps were followed by hand.
+**Next:**
+1. Khang or Hung writes about 35 hidden test phrases; run full1 once as it would ship (llama.cpp Q8_0, greedy).
+2. More training data for M16, M25, S28 and X01; train a new adapter.
+3. App change, plan section 4: llama-server behind the `Rewriter` (127.0.0.1, API key), then the new guard.
+**Khang must do by hand:** write the hidden test phrases (`messy → meant`); confirm full1 as the candidate and the Q8_0 + greedy proposal; spot-check the Claude-filled reviews; say whether "the right reading offered only second" passes when the context makes it clear (X08 was marked n, M16 and X05 y). Still open: the exact new name; remove the two people who left from `-eye-able`.
+**For Cowork:** for the lawyer: Anthropic's terms and training on Claude-written data, NVIDIA's terms for shipping the CUDA runtime DLLs, the licence for new code, IP agreements. How the installer ships llama.cpp (the CUDA build with NVIDIA's DLLs is about 770 MB; CPU or Vulkan builds for laptops).
+**Notes from Khang:** none
+
 ## 2026-11-02 18:31: Clean-up scoring runner built; baseline measured; old-name scan
 Branch: voice-cleanup-eval · Commits: d1cbb5b eval: clean-up prompts v1, plain and full; 9c29b5e eval: scoring runner for the dictation clean-up test set; 41ccec7 eval: a name from the user's word list isn't an invented fact · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:**

@@ -145,6 +145,10 @@ Also checked: llama.cpp's own tokenizer gives the same ids as Hugging Face's on 
 Review: Claude with Khang's rule; outputs judged before keep their answers.
 Evidence: `eval/dictation_cleanup/reviews/2026-11-03_dev_llamacpp_score.md` and `..._dev_greedy_score.md`, run folders `runs/2026-11-03_full1-*` and `runs/2026-11-03_Qwen3.5-4B-full1-greedy_cleanup_t1_short`. Decided by: measured in the speed check Khang approved; which file and decoding the app uses is Khang's call (Proposed, below).
 
+**2026-11-02. One Claude Code session per job, started with /start.**
+Khang wants one chat per job. `/start <task>` (`.claude/skills/start/`) begins a new session: it reads STATUS.md, the latest SESSION_LOG.md entries and git, then gives a short briefing and a plan. `/wrap-up` ends it. Recorded late, at the 2026-11-03 wrap-up.
+Decided by: Khang.
+
 ---
 
 ## Proposed, not yet agreed
