@@ -7,6 +7,7 @@ later (for low-end laptop timing) is one more class here.
 - CurrentBackend: today's clean-up exactly as the app runs it (engine/voice/rewrite.py: the model from
   engine/config.py, the guard and the light_clean fallback). The baseline. Plain-text answers.
 - TransformersBackend: any model by name on the GPU, answering in JSON. For Qwen3.5: thinking off.
+- LlamaCppBackend: a GGUF file (engine/voice/cleanup_train/export.py) in llama.cpp's server on 127.0.0.1.
 - FakeBackend: scripted answers, for tests (no GPU, no downloads).
 
 Runs locally; nothing is sent anywhere (first-run model downloads aside).
@@ -15,7 +16,10 @@ Runs locally; nothing is sent anywhere (first-run model downloads aside).
 from __future__ import annotations
 
 import json
+import subprocess
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from eval.dictation_cleanup.scoring import Answer, parse_answer
 
@@ -50,6 +54,31 @@ def _sync() -> None:
     torch = sys.modules.get("torch")
     if torch is not None and torch.cuda.is_available():
         torch.cuda.synchronize()
+
+
+def _gpu_used_mib() -> int | None:
+    """Whole-card memory in use (nvidia-smi). Windows doesn't report it per process."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=10).stdout
+        return int(out.split()[0])
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        return None
+
+
+def _chat_template(model_id: str):
+    """(tokenizer, the object that holds the chat template): Qwen3.5 keeps the template in its processor."""
+    from transformers import AutoTokenizer
+
+    from engine.core import hf
+
+    with hf.LOAD_LOCK:
+        tok = AutoTokenizer.from_pretrained(model_id)
+    if getattr(tok, "chat_template", None) is not None:
+        return tok, tok
+    from transformers import AutoProcessor
+
+    return tok, AutoProcessor.from_pretrained(model_id)
 
 
 # ------------------------------------------------------------------ today's clean-up
@@ -221,6 +250,128 @@ class TransformersBackend:
 
     def peak_gpu_gb(self) -> float | None:
         return _peak_gpu_gb()
+
+
+# ------------------------------------------------------------------ a GGUF file in llama.cpp
+class LlamaCppBackend:
+    """A GGUF model in llama.cpp's llama-server, on 127.0.0.1 only and offline, answering in JSON.
+
+    The prompt is the Hugging Face chat template (thinking off) turned into token ids by the Hugging Face
+    tokenizer, so llama.cpp gets exactly the tokens the training and the transformers backend used. Same
+    Qwen3.5 sampling, in transformers' order (temperature, top-k, top-p, min-p); llama.cpp's sampler isn't
+    bit-identical to transformers', so the wording can differ at the same seed. A case's time is the whole
+    request, as an app calling the server would see it. The server starts in load() and stops in close().
+    """
+
+    name = "llamacpp"
+    SAMPLING = {"temperature": 0.7, "top_k": 20, "top_p": 0.8, "min_p": 0.0, "repeat_penalty": 1.0,
+                "samplers": ["temperature", "top_k", "top_p", "min_p"]}
+    NOT_APPLIED = {"presence_penalty": 1.5}               # as in TransformersBackend, so the runs compare
+
+    def __init__(self, gguf: str, server: str, tokenizer: str = "Qwen/Qwen3.5-4B", seed: int = 1234,
+                 max_new_tokens: int = 256, ctx: int = 4096) -> None:
+        self.gguf, self.server, self.tokenizer_id = gguf, server, tokenizer
+        self.seed, self.max_new_tokens, self.ctx = seed, max_new_tokens, ctx
+        self._tok = self._template = self._proc = self._url = self._log = None
+        self._version = self._gpu_before = None
+        import urllib.request
+
+        self._http = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # never through a proxy
+
+    @property
+    def model_label(self) -> str:
+        return f"llama.cpp/{Path(self.gguf).stem}"           # .../gguf/full1-q8_0.gguf -> llama.cpp/full1-q8_0
+
+    def settings(self) -> dict:
+        size = Path(self.gguf).stat().st_size if Path(self.gguf).exists() else None
+        return {"backend": self.name, "model": self.model_label, "gguf": self.gguf,
+                "gguf_gb": round(size / 1e9, 2) if size else None, "server": self.server,
+                "server_version": self._version, "tokenizer": self.tokenizer_id, "ctx": self.ctx,
+                "gpu_layers": "all (-ngl 99)", "seed": self.seed, "seed_rule": "sent with every case",
+                "max_new_tokens": self.max_new_tokens, "sampling": self.SAMPLING, "enable_thinking": False,
+                "prompt_sent_as": "token ids from the Hugging Face tokenizer",
+                "card_settings_not_applied": self.NOT_APPLIED,
+                "peak_gpu_gb_measure": "nvidia-smi, whole card: in use at the end of the run minus before the server"}
+
+    def load(self) -> None:
+        import atexit
+        import socket
+
+        self._tok, self._template = _chat_template(self.tokenizer_id)
+        v = subprocess.run([self.server, "--version"], capture_output=True, text=True, timeout=60)
+        self._version = next((line for line in (v.stdout + v.stderr).splitlines() if line.startswith("version")), None)
+        self._gpu_before = _gpu_used_mib()
+        with socket.socket() as s:                          # a free port on this machine only
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        log = Path(self.gguf).with_suffix(".server.log")
+        self._log = log.open("wb")
+        self._proc = subprocess.Popen([self.server, "-m", self.gguf, "--host", "127.0.0.1", "--port", str(port),
+                                       "-ngl", "99", "-c", str(self.ctx), "-np", "1", "--no-webui", "--offline"],
+                                      stdout=self._log, stderr=subprocess.STDOUT)
+        atexit.register(self.close)
+        self._url = f"http://127.0.0.1:{port}"
+        deadline = time.monotonic() + 300
+        while not self._ready():
+            if self._proc.poll() is not None:
+                raise RuntimeError(f"llama-server stopped (exit {self._proc.returncode}); its log: {log}")
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"llama-server not ready after 300 s; its log: {log}")
+            time.sleep(0.25)
+
+    def _ready(self) -> bool:
+        try:
+            with self._http.open(self._url + "/health", timeout=2) as r:
+                return r.status == 200
+        except OSError:                                     # refused, or 503 while the model loads
+            return False
+
+    def _post(self, path: str, body: dict) -> dict:
+        import urllib.request
+
+        req = urllib.request.Request(self._url + path, data=json.dumps(body).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"})
+        with self._http.open(req, timeout=120) as r:
+            return json.loads(r.read().decode("utf-8"))
+
+    def _generate(self, messages: list[dict]) -> tuple[str, int | None, bool, dict]:
+        text = self._template.apply_chat_template(messages, add_generation_prompt=True, tokenize=False,
+                                                  enable_thinking=False)
+        ids = self._tok(text, add_special_tokens=False)["input_ids"]
+        r = self._post("/completion", {"prompt": ids, "n_predict": self.max_new_tokens, "seed": self.seed,
+                                       "cache_prompt": True, "stream": False, **self.SAMPLING})
+        cut_off = r.get("stop_type") == "limit" or bool(r.get("truncated"))
+        return r["content"], r.get("tokens_predicted"), cut_off, r.get("timings") or {}
+
+    def warm_up(self) -> None:
+        self._generate([{"role": "system", "content": "Answer in JSON."},
+                        {"role": "user", "content": "um so this is uh a test"}])
+
+    def clean(self, case: dict, prompt) -> Reply:
+        raw, tokens, cut_off, t = self._generate(prompt.messages(case))
+        server_ms = round(t["prompt_ms"] + t["predicted_ms"], 1) if "prompt_ms" in t and "predicted_ms" in t else None
+        return Reply(raw, parse_answer(raw), tokens, {"cut_off": cut_off, "server_ms": server_ms})
+
+    def sync(self) -> None:
+        pass                                                # the answer is back: nothing still running
+
+    def peak_gpu_gb(self) -> float | None:
+        now = _gpu_used_mib()
+        if now is None or self._gpu_before is None:
+            return None
+        return round((now - self._gpu_before) * 2**20 / 1e9, 2)
+
+    def close(self) -> None:
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+        self._proc = None
+        if self._log is not None:
+            self._log.close()
+            self._log = None
 
 
 # ------------------------------------------------------------------ tests

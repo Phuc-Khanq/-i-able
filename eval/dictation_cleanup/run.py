@@ -4,6 +4,7 @@
     python -m eval.dictation_cleanup.run --backend transformers --model Qwen/Qwen3.5-4B --prompt v1_plain
     python -m eval.dictation_cleanup.run --backend transformers --model Qwen/Qwen3.5-4B --prompt v1_full
     python -m eval.dictation_cleanup.run --backend transformers --model Qwen/Qwen3.5-4B --prompt t1_short         --adapter checkpoints/cleanup/pilot/adapter                             # our trained adapter
+    python -m eval.dictation_cleanup.run --backend llamacpp --prompt t1_short         --model checkpoints/cleanup/full1/gguf/full1-q8_0.gguf                 # the same, exported for llama.cpp
     python -m eval.dictation_cleanup.run --backend fake --limit 5               # no GPU: checks the runner
 
 Writes eval/dictation_cleanup/runs/<date>_<model>_<prompt>/ (git-ignored): results.jsonl (one line per case,
@@ -124,16 +125,25 @@ def make_backend(args):
             raise SystemExit("--model is required for the transformers backend")
         return backends.TransformersBackend(args.model, device=args.device or "cuda", seed=args.seed,
                                             max_new_tokens=args.max_new_tokens, adapter=args.adapter)
+    if args.backend == "llamacpp":
+        if not args.model or not args.model.endswith(".gguf"):
+            raise SystemExit("--model must be a .gguf file for the llamacpp backend")
+        from engine.voice.cleanup_train.export import LLAMA_CPP
+
+        server = args.llama_server or str(LLAMA_CPP / "bin" / "llama-server.exe")
+        return backends.LlamaCppBackend(args.model, server, seed=args.seed, max_new_tokens=args.max_new_tokens)
     return backends.FakeBackend()
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Score a dictation clean-up backend on eval/dictation_cleanup/testset.csv.")
-    p.add_argument("--backend", choices=["current", "transformers", "fake"])
+    p.add_argument("--backend", choices=["current", "transformers", "llamacpp", "fake"])
     p.add_argument("--rescore", type=Path, nargs="+", metavar="RUN_FOLDER",
                    help="re-run the automatic checks on finished runs (no model needed)")
-    p.add_argument("--model", help="model name (transformers), or an override of rewrite_model (current)")
+    p.add_argument("--model", help="model name (transformers), a .gguf file (llamacpp), or an override of "
+                                   "rewrite_model (current)")
     p.add_argument("--adapter", help="a trained LoRA folder (transformers), e.g. checkpoints/cleanup/pilot/adapter")
+    p.add_argument("--llama-server", help="llama-server.exe (llamacpp); default: the one in downloads/llama.cpp/")
     p.add_argument("--prompt", default="v1_plain", help="prompt version in prompts/ (not used by current)")
     p.add_argument("--split", choices=list(scoring.SPLITS), default="dev")
     p.add_argument("--device", help="cuda (default) or cpu")
@@ -156,7 +166,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit:
         cases = cases[:args.limit]
     prompt = None if args.backend == "current" else load_prompt(args.prompt)
-    folder = run(make_backend(args), cases, prompt, args.out, split=args.split)
+    backend = make_backend(args)
+    try:
+        folder = run(backend, cases, prompt, args.out, split=args.split)
+    finally:
+        getattr(backend, "close", lambda: None)()          # llamacpp: stop its server
     print(f"Done: {folder / 'summary.md'}")
     return 0
 

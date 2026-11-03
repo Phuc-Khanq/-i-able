@@ -261,6 +261,65 @@ class TestCurrentBackend(unittest.TestCase):
         self.assertEqual(r3.extra["guard_reason"], "name missing: sam")
 
 
+class FakeTokenizer:
+    """Stands in for the Hugging Face tokenizer and its chat template: one id per word."""
+
+    def apply_chat_template(self, messages, add_generation_prompt, tokenize, enable_thinking):
+        assert add_generation_prompt and not tokenize and enable_thinking is False
+        return " | ".join(m["content"] for m in messages)
+
+    def __call__(self, text, add_special_tokens):
+        return {"input_ids": [len(w) for w in text.split()]}
+
+
+class TestLlamaCppBackend(unittest.TestCase):
+    GGUF = "missing/gguf/full1-q8_0.gguf"
+
+    def backend(self, reply: dict) -> backends.LlamaCppBackend:
+        b = backends.LlamaCppBackend(self.GGUF, "llama-server.exe")
+        b._tok = b._template = FakeTokenizer()
+        b.sent = []
+        b._post = lambda path, body: b.sent.append((path, body)) or reply     # no server: answers from the script
+        return b
+
+    def test_sends_token_ids_and_the_reviewed_sampling(self):
+        b = self.backend({"content": '{"text": "Hi there.", "alternatives": [], "uncertain": false}',
+                          "tokens_predicted": 12, "stop_type": "eos", "timings": {"prompt_ms": 3.0, "predicted_ms": 90.5}})
+        r = b.clean(case(asr_best="um hi there"), load_prompt("t1_short"))
+        path, body = b.sent[0]
+        self.assertEqual(path, "/completion")
+        self.assertTrue(body["prompt"] and all(isinstance(t, int) for t in body["prompt"]))   # ids, not text
+        self.assertEqual((body["seed"], body["n_predict"], body["temperature"], body["top_p"], body["top_k"],
+                          body["min_p"], body["repeat_penalty"]), (1234, 256, 0.7, 0.8, 20, 0.0, 1.0))
+        self.assertEqual(body["samplers"], ["temperature", "top_k", "top_p", "min_p"])     # transformers' order
+        self.assertEqual((r.answer.text, r.tokens, r.extra), ("Hi there.", 12, {"cut_off": False, "server_ms": 93.5}))
+
+    def test_a_reply_stopped_by_the_token_limit_is_marked(self):
+        b = self.backend({"content": '{"text": "Hi', "tokens_predicted": 256, "stop_type": "limit"})
+        r = b.clean(case(asr_best="um hi there"), load_prompt("t1_short"))
+        self.assertTrue(r.extra["cut_off"])
+        self.assertIsNone(r.extra["server_ms"])
+        self.assertFalse(r.answer.json_ok)
+
+    def test_label_settings_and_close_without_a_server(self):
+        b = backends.LlamaCppBackend(self.GGUF, "llama-server.exe")
+        self.assertEqual(b.model_label, "llama.cpp/full1-q8_0")
+        self.assertEqual((b.settings()["backend"], b.settings()["gguf_gb"]), ("llamacpp", None))
+        b.close()                                                # nothing started: nothing to stop
+
+    def test_runner_wants_a_gguf_file(self):
+        import argparse
+
+        args = argparse.Namespace(backend="llamacpp", model="Qwen/Qwen3.5-4B", llama_server=None, seed=1234,
+                                  max_new_tokens=256, device=None, adapter=None)
+        with self.assertRaises(SystemExit):
+            run.make_backend(args)
+        args.model = self.GGUF
+        b = run.make_backend(args)
+        self.assertIsInstance(b, backends.LlamaCppBackend)
+        self.assertTrue(b.server.endswith("llama-server.exe"))
+
+
 class TestRunner(unittest.TestCase):
     def test_fake_run_writes_every_file(self):
         with tempfile.TemporaryDirectory() as tmp:
