@@ -56,7 +56,10 @@ without the user picking it. (`engine/eyes/dictation_card.py` and the website.)
 Step 3 is built (2026-11-03, branch `voice-cleanup-app`): the request carries `context` and `app`, the result and
 `DICTATION_PREVIEW` carry `alternatives` and `uncertain`, and the website stores them. Nothing shows them yet.
 
-Proposal for step 4, **waiting for Khang's OK on the look** (the website rule: ask before changing layout):
+Step 4, **built 2026-11-03 with Khang's OK on the look** (commit 69687d2). Two changes from the proposal: the
+card is click-through, so instead of "Option 2" labels in its action row each reading carries its spoken words
+("option two") on its own line; the website panel has real Option buttons. Readings are numbered from 1 (the
+model's), and the preview's optional `choice` says which one shows. The proposal as agreed:
 - Card, "Will type" state: under the text, a small "Or:" list, numbered from 2 ("2 · Send the pitcher to Mom."),
   at most two lines. The action row gains "Option 2" (and "Option 3") next to "Use original"; the hint field says
   "say option two". With `uncertain` the state label reads "Check this" instead of "Will type".
