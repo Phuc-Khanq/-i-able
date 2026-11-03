@@ -315,9 +315,11 @@ def _stutter(name: str) -> bool:
     return len(name) <= 2 or "-" in name or name.endswith("'")
 
 
-def check_cleanup(original: str, clean: str, words: list[str] = ()) -> str | None:
+def check_cleanup(original: str, clean: str, words: list[str] = (), context: str = "") -> str | None:
     """Why the trained model's text must not be used, or None if it's safe to show. `words` is the user's word
-    list: a name or term on it isn't invented, and may replace a name the recognizer got wrong."""
+    list: a name or term on it isn't invented, and may replace a name the recognizer got wrong. `context`, what
+    was typed earlier in this dictation, counts the same way ("Dr. Alvarez" typed before)."""
+    words = [*words, context] if context else list(words)
     if not clean or not clean.strip():
         return "empty"
     orig_w, clean_w = normalize_words(original), normalize_words(clean)
@@ -490,8 +492,10 @@ def tidy(output: str, original: str = "") -> str:
 class RewriteOutcome:
     """Everything about one rewrite, for rewrite_check: what came out and why it was (not) used."""
 
-    def __init__(self, text: str, clean: str, used: bool, ms: float, reason: str | None, output: str = ""):
+    def __init__(self, text: str, clean: str, used: bool, ms: float, reason: str | None, output: str = "",
+                 alternatives: list[str] | None = None, uncertain: bool = False):
         self.text, self.clean, self.used, self.ms, self.reason, self.output = text, clean, used, ms, reason, output
+        self.alternatives, self.uncertain = alternatives or [], uncertain   # the trained model's other readings
 
 
 class Rewriter:
@@ -499,9 +503,12 @@ class Rewriter:
 
     Two backends (settings.rewrite_backend): "transformers", the original small model (rewrite_model) held to
     check_rewrite / check_refine; "llamacpp", our trained clean-up model in llama-server (cleanup_model.py,
-    rewrite_gguf) held to check_cleanup. Tests pass `model` and `tokenizer`, or `cleanup`, (fakes) to skip
-    loading. Never raises from rewrite(): if anything fails, the user's own words come back (fail open).
+    rewrite_gguf) held to check_cleanup, which also gets the context and app hints and may give other readings.
+    Tests pass `model` and `tokenizer`, or `cleanup`, (fakes) to skip loading. Never raises from rewrite(): if
+    anything fails, the user's own words come back (fail open).
     """
+
+    takes_context = True                # RewriteWorker passes REWRITE_REQUEST's context and app to *_full
 
     def __init__(self, settings=None, model=None, tokenizer=None, clock=None, log=print, cleanup=None) -> None:
         import time
@@ -565,10 +572,10 @@ class Rewriter:
         self.rewrite_full("um so this is uh a test")
 
     def _generate(self, text: str, system: str = SYSTEM_PROMPT, examples=None, max_s: float | None = None,
-                  refine: bool = False) -> tuple[str, bool]:
+                  refine: bool = False, context: str = "", app: str = "") -> tuple[str, bool]:
         """(the model's new text, cut_off). cut_off: it stopped on the token or time cap, not on its own."""
         if self.backend == "llamacpp":
-            return self._generate_cleanup(text, self.max_s if max_s is None else max_s)
+            return self._generate_cleanup(text, self.max_s if max_s is None else max_s, context, app)
         import torch
 
         self.load()
@@ -594,30 +601,50 @@ class Rewriter:
         cut_off = not any(t in eos_ids for t in new)
         return tok.decode(new, skip_special_tokens=True), cut_off
 
-    def _generate_cleanup(self, text: str, max_s: float) -> tuple[str, bool]:
+    def _generate_cleanup(self, text: str, max_s: float, context: str = "", app: str = "") -> tuple[str, bool]:
         """The trained model (llamacpp): its answer's text. It never saw the (?)word(?) marks, so they go."""
         self.load()
         self.last_answer = None
-        answer, cut_off = self._cleanup.clean(_UNSURE.sub(lambda m: m.group(1), text), max_s=max_s)
+        answer, cut_off = self._cleanup.clean(_UNSURE.sub(lambda m: m.group(1), text), max_s=max_s,
+                                              before=context, app=app)
         if answer is None:
             raise ValueError("the clean-up model's answer isn't valid JSON")
         self.last_answer = answer
         return answer.text, cut_off
 
-    def _check(self, original: str, clean: str, unsure: set[str] | None = None, refine: bool = False) -> str | None:
+    def _check(self, original: str, clean: str, unsure: set[str] | None = None, refine: bool = False,
+               context: str = "") -> str | None:
         """The guard for this backend: check_cleanup for the trained model, else check_rewrite / check_refine."""
         if self.backend == "llamacpp":
-            return check_cleanup(original, clean, self.words)
+            return check_cleanup(original, clean, self.words, context)
         return check_refine(original, clean, unsure) if refine else check_rewrite(original, clean)
 
-    def rewrite_full(self, text: str) -> RewriteOutcome:
+    def _readings(self, original: str, clean: str, context: str) -> tuple[list[str], bool]:
+        """The trained model's other readings that pass the same guard (an invented "gluten-free takeout" doesn't),
+        and whether it was unsure. Nothing for the transformers model."""
+        a = self.last_answer
+        if self.backend != "llamacpp" or a is None:
+            return [], False
+        seen, alts = {" ".join(normalize_words(clean))}, []
+        main, heard = _content(normalize_words(clean)), set(normalize_words(original))
+        for alt in a.alternatives:
+            key = " ".join(normalize_words(alt))
+            other = _content(normalize_words(alt))
+            if (other - main - heard) and not (main - other):
+                continue                  # only adds words on top of the main reading: "gluten-free takeout"
+            if key not in seen and check_cleanup(original, alt, self.words, context) is None:
+                seen.add(key)
+                alts.append(alt)
+        return alts, a.uncertain
+
+    def rewrite_full(self, text: str, context: str = "", app: str = "") -> RewriteOutcome:
         import time
 
         if not text or not text.strip():
             return RewriteOutcome(text, text, False, 0.0, "nothing to clean")
         t0 = time.perf_counter()
         try:
-            output, cut_off = self._generate(text)
+            output, cut_off = self._generate(text, context=context, app=app)
         except Exception as exc:                                 # dictation must never stop because of this
             now = self._clock()
             if now - self._last_error >= 60:
@@ -626,9 +653,10 @@ class Rewriter:
             return self._fallback(text, f"error: {exc}", round((time.perf_counter() - t0) * 1000, 1))
         ms = round((time.perf_counter() - t0) * 1000, 1)
         clean = tidy(output, text)
-        reason = "cut off (token or time cap)" if cut_off else self._check(text, clean)
+        reason = "cut off (token or time cap)" if cut_off else self._check(text, clean, context=context)
         if reason is None:
-            return RewriteOutcome(text, clean, True, ms, None, output)
+            alts, unsure = self._readings(text, clean, context)
+            return RewriteOutcome(text, clean, True, ms, None, output, alts, unsure)
         return self._fallback(text, reason, ms, output)
 
     @staticmethod
@@ -645,7 +673,7 @@ class Rewriter:
         r = self.rewrite_full(text)
         return r.clean, r.used, r.ms
 
-    def refine_full(self, marked: str) -> RewriteOutcome:
+    def refine_full(self, marked: str, context: str = "", app: str = "") -> RewriteOutcome:
         """Refine a whole passage. `marked` is the user's words with (?)word(?) around the ones Whisper was
         unsure of. Not used (rejected, cut off, failed): the user's own words come back, so the caller keeps
         whatever it was already showing."""
@@ -657,7 +685,7 @@ class Rewriter:
         t0 = time.perf_counter()
         try:
             output, cut_off = self._generate(marked, system=REFINE_SYSTEM_PROMPT, examples=REFINE_EXAMPLES,
-                                             max_s=self.refine_max_s, refine=True)
+                                             max_s=self.refine_max_s, refine=True, context=context, app=app)
         except Exception as exc:                                 # never stops dictation
             now = self._clock()
             if now - self._last_error >= 60:
@@ -666,9 +694,11 @@ class Rewriter:
             return RewriteOutcome(text, text, False, round((time.perf_counter() - t0) * 1000, 1), f"error: {exc}")
         ms = round((time.perf_counter() - t0) * 1000, 1)
         refined = tidy(output, text)
-        reason = "cut off (token or time cap)" if cut_off else self._check(text, refined, unsure_words(marked), refine=True)
+        reason = ("cut off (token or time cap)" if cut_off
+                  else self._check(text, refined, unsure_words(marked), refine=True, context=context))
         if reason is None:
-            return RewriteOutcome(text, refined, True, ms, None, output)
+            alts, unsure = self._readings(text, refined, context)
+            return RewriteOutcome(text, refined, True, ms, None, output, alts, unsure)
         return RewriteOutcome(text, text, False, ms, reason, output)
 
     def refine(self, marked: str) -> tuple[str, bool, float]:
@@ -749,11 +779,16 @@ class RewriteWorker:
         from engine.core import topics
 
         text = request.get("text", "")
-        clean, used, ms = text, False, 0.0
+        clean, used, ms, alts, unsure = text, False, 0.0, [], False
         refine = request.get("mode") == "refine"
+        hints = {k: request[k] for k in ("context", "app") if request.get(k)}
         if self.off_reason is None:
             try:
-                if refine:       # the whole passage, once the user has stopped talking
+                if getattr(self.rewriter, "takes_context", False):   # the Rewriter: hints in, other readings out
+                    full = self.rewriter.refine_full if refine else self.rewriter.rewrite_full
+                    r = full((request.get("marked") or text) if refine else text, **hints)
+                    clean, used, ms, alts, unsure = r.clean, r.used, r.ms, r.alternatives, r.uncertain
+                elif refine:     # the whole passage, once the user has stopped talking
                     fn = getattr(self.rewriter, "refine", None)
                     if fn is not None:
                         clean, used, ms = fn(request.get("marked") or text)
@@ -761,8 +796,12 @@ class RewriteWorker:
                     clean, used, ms = self.rewriter.rewrite(text)
             except Exception as exc:                 # Rewriter.rewrite doesn't raise; a fake might
                 self._log(f"[{'refine' if refine else 'rewrite'}] failed ({exc}); using the original text")
-                clean, used = text, False
+                clean, used, alts, unsure = text, False, [], False
         result = {"id": request.get("id"), "clean": clean, "used": bool(used), "ms": ms}
+        if used and alts:
+            result["alternatives"] = list(alts)
+        if used and unsure:
+            result["uncertain"] = True
         if refine:
             result["mode"] = "refine"
         self.bus.publish(topics.REWRITE_RESULT, result)

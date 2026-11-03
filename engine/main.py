@@ -61,6 +61,9 @@ class Engine:
             rewrite_wait_s=float(getattr(settings, "rewrite_wait_s", 1.5)) if rewrite else None,
             refine_after_s=(float(getattr(settings, "refine_after_s", 3.0))
                             if rewrite and getattr(settings, "refine_dictation", True) else None))
+        if rewrite:                                  # the clean-up also learns what kind of app is in front
+            from engine.eyes.os_input import foreground_app
+            self.mode_manager.app_name = foreground_app
         # 2. eyes (Khang and Hung): camera -> face_mesh -> eye_features / head_pose -> pointer ->
         #    the cursor, plus head_gestures; UI-Venus answers target requests; os_output carries out
         #    topics.OS_* on Windows. Off by default (eyes=False), so tests never touch the camera,

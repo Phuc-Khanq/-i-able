@@ -84,6 +84,7 @@ TARGET_TIMEOUT_S = 6.0   # UI-Venus should answer well inside this
 SNAP_TIMEOUT_S = 3.0     # a snap click later than this would surprise; it doesn't click
 SNAP_LABEL = "here"      # the label of a snap request (there is no name)
 REFINE_QUIET_S = 1.0     # the refine waits until the mic has heard no speech for this long
+CONTEXT_CHARS = 300      # the clean-up sees at most this much of what this dictation already typed
 SPEECH_GUARD_S = 1.0     # a mouth gesture this soon after the mic heard speech is talking
 TICK_S = 0.25
 REPEAT_CLICK_S = 3.0      # "click Send" again this soon after Send was clicked is a repeat, not a new click
@@ -201,6 +202,11 @@ class ModeManager:
         self._rf_running = False                 # a refine of the current preview is running
         self._rf_due: float | None = None        # clock time the refine starts if the user stays quiet
         self._refined: list[dict] | None = None  # the accepted refined words for the current preview
+        # The trained clean-up model also gets what was typed earlier in this dictation and the kind of app in front
+        # (main.py sets app_name to os_input.foreground_app), and may answer with other readings
+        self.app_name: Callable[[], str] = lambda: ""
+        self._typed = ""                         # what this dictation typed so far (the last CONTEXT_CHARS)
+        self._readings: dict[str, tuple[list[str], bool]] = {}   # "clean" / "refined" -> (alternatives, uncertain)
         self._lock = threading.RLock()
         self._stop = threading.Event()
 
@@ -806,6 +812,7 @@ class ModeManager:
         text = self._preview_text()
         if text:
             self._os(topics.OS_TYPE, text=text + " ")
+            self._typed = f"{self._typed} {text}".strip()[-CONTEXT_CHARS:]
             self.preview = []
             self._preview_changed(clean_up=False)          # empty words = hide the bubble
         if then:
@@ -836,6 +843,7 @@ class ModeManager:
         self._pending = None
         self._clean = None
         self._refined = None
+        self._readings = {}
         self._rf_id += 1                                   # a refine of older text is ignored too
         self._rf_running = False
         self._rf_due = None
@@ -846,7 +854,7 @@ class ModeManager:
         elif self._cleaning() and clean_up:
             self._rw_running = True
             self.bus.publish(topics.REWRITE_REQUEST,
-                             {"id": self._rw_id, "text": " ".join(w["text"] for w in self.preview)})
+                             {"id": self._rw_id, "text": " ".join(w["text"] for w in self.preview), **self._hints()})
             if self.refine_after_s is not None and len(self.preview) >= self.refine_min_words:
                 self._rf_due = self.clock() + self.refine_after_s   # quiet this long: refine the whole passage
         self._show_preview()
@@ -862,14 +870,27 @@ class ModeManager:
         self.bus.publish(topics.REWRITE_REQUEST,
                          {"id": self._rf_id, "mode": "refine",
                           "text": " ".join(w["text"] for w in self.preview),
-                          "marked": mark_unsure(self.preview)})
+                          "marked": mark_unsure(self.preview), **self._hints()})
+
+    def _hints(self) -> dict:
+        """What else the clean-up may use: text typed earlier in this dictation, and the kind of app in front."""
+        hints = {"context": self._typed}
+        try:
+            hints["app"] = self.app_name() or ""
+        except Exception:                                  # a broken lookup never stops dictation
+            hints["app"] = ""
+        return {k: v for k, v in hints.items() if v}
 
     def _show_preview(self) -> None:
         if not self._cleaning():
             self._ui(messages.DICTATION_PREVIEW, words=list(self.preview))   # exactly as before
         elif self._best_clean() is not None and self._use_clean:
+            alts, unsure = self._readings.get("refined" if self._refined is not None else "clean", ([], False))
+            extra = {"alternatives": alts} if alts else {}
+            if unsure:
+                extra["uncertain"] = True
             self._ui(messages.DICTATION_PREVIEW, words=list(self._best_clean()),
-                     original=" ".join(w["text"] for w in self.preview), cleaned=True)
+                     original=" ".join(w["text"] for w in self.preview), cleaned=True, **extra)
         else:
             self._ui(messages.DICTATION_PREVIEW, words=list(self.preview), cleaned=False)
 
@@ -881,6 +902,7 @@ class ModeManager:
                 self._rf_running = False
                 if result.get("used") and str(result.get("clean", "")).strip():
                     self._refined = self._clean_words(result["clean"])
+                    self._readings["refined"] = (list(result.get("alternatives") or []), bool(result.get("uncertain")))
                     if self._use_clean:
                         self._show_preview()
                 if self._pending and not self._rw_running:
@@ -891,6 +913,7 @@ class ModeManager:
             self._rw_running = False
             if result.get("used") and str(result.get("clean", "")).strip():
                 self._clean = self._clean_words(result["clean"])
+                self._readings["clean"] = (list(result.get("alternatives") or []), bool(result.get("uncertain")))
                 if self._use_clean:
                     self._show_preview()
             if self._pending and not self._rf_running:
@@ -942,6 +965,7 @@ class ModeManager:
             return
         if self.mode == Mode.DICTATION and mode == Mode.POINTER:
             self._discard_preview()   # leaving dictation for good: drop what wasn't confirmed
+            self._typed = ""          # the next dictation starts without context
         self.mode = mode
         self._ui(messages.MODE, mode=mode.value)
 

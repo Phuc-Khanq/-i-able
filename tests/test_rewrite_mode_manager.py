@@ -185,6 +185,49 @@ class TestWaitingInsert(Base):
         self.assertEqual(self.mm.mode, Mode.POINTER)
 
 
+class TestHintsAndReadings(Base):
+    def test_typed_text_and_the_app_go_with_the_next_request(self):
+        self.mm.app_name = lambda: "email"
+        self.dictating("hi doctor alvarez")
+        first = self.requests()[-1]
+        self.assertEqual((first.get("context"), first["app"]), (None, "email"))   # nothing typed yet
+        self.answer("Hi Dr. Alvarez,")
+        self.say("yes")
+        self.say("thanks for the call")
+        self.assertEqual(self.requests()[-1]["context"], "Hi Dr. Alvarez,")
+
+    def test_leaving_dictation_forgets_the_typed_text(self):
+        self.dictating("hello there")
+        self.answer("Hello there.")
+        self.say("yes")
+        self.say("stop dictation")
+        self.say("start dictation")
+        self.say("next one")
+        self.assertNotIn("context", self.requests()[-1])
+
+    def test_a_broken_app_lookup_never_stops_dictation(self):
+        def boom():
+            raise OSError("no window")
+        self.mm.app_name = boom
+        self.dictating("still works")
+        self.assertNotIn("app", self.requests()[-1])
+
+    def test_other_readings_reach_the_preview(self):
+        self.dictating("send the pitcher to mom")
+        req = self.requests()[-1]
+        self.bus.publish(topics.REWRITE_RESULT, {"id": req["id"], "clean": "Send the picture to Mom.", "used": True,
+                                                 "ms": 300.0, "alternatives": ["Send the pitcher to Mom."],
+                                                 "uncertain": True})
+        p = self.preview()
+        self.assertEqual((self.shown(), p["alternatives"], p["uncertain"]),
+                         ("Send the picture to Mom.", ["Send the pitcher to Mom."], True))
+
+    def test_without_readings_the_preview_is_as_before(self):
+        self.dictating("um hello")
+        self.answer("Hello.")
+        self.assertEqual(set(self.preview()), {"type", "words", "original", "cleaned"})
+
+
 class TestSwitchingVersions(Base):
     def test_use_original_then_clean_it_up(self):
         self.dictating("um so I I think we should uh go")

@@ -158,3 +158,60 @@ def combo(keys: str) -> None:
     finally:
         for mod in reversed(named[:-1]):
             kb.release(mod)
+
+
+# ------------------------------------------------------------------ the app in front (for the dictation clean-up)
+# The trained clean-up model was taught with plain app kinds ("email", "Slack", "document" ...), so the program in
+# front is mapped to one. The window title is read only to tell apps apart inside a browser; it is never logged or
+# kept, and the kind goes only to the local clean-up model.
+APP_BY_PROGRAM = {"outlook": "email", "olk": "email", "thunderbird": "email", "hxoutlook": "email",
+                  "slack": "Slack", "ms-teams": "Teams", "teams": "Teams", "discord": "Discord",
+                  "whatsapp": "WhatsApp", "telegram": "chat", "signal": "chat", "zoom": "chat",
+                  "winword": "document", "soffice": "document", "notepad": "notes", "onenote": "notes",
+                  "obsidian": "notes", "excel": "spreadsheet", "powerpnt": "slides", "code": "code editor"}
+BROWSERS = {"chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "arc"}
+APP_BY_TITLE = [("gmail", "email"), ("outlook", "email"), ("mail", "email"), ("whatsapp", "WhatsApp"),
+                ("messenger", "chat"), ("slack", "Slack"), ("discord", "Discord"), ("teams", "Teams"),
+                ("google docs", "document"), ("word", "document"), ("linkedin", "LinkedIn"),
+                ("facebook", "Facebook"), ("instagram", "Instagram"), ("github", "GitHub"), ("twitch", "Twitch")]
+
+
+def app_kind(program: str, title: str = "") -> str:
+    """"OUTLOOK.EXE" -> "email"; a browser by its title ("Inbox - Gmail" -> "email", else "browser"); "" if unknown."""
+    name = program.lower().rsplit("\\", 1)[-1].removesuffix(".exe")
+    if name in APP_BY_PROGRAM:
+        return APP_BY_PROGRAM[name]
+    if name in BROWSERS:
+        low = title.lower()
+        return next((kind for key, kind in APP_BY_TITLE if key in low), "browser")
+    return ""
+
+
+def foreground_app() -> str:
+    """The kind of app in front on Windows (app_kind), or "" when it can't be told."""
+    if sys.platform != "win32":
+        return ""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return ""
+        title = ctypes.create_unicode_buffer(256)
+        user32.GetWindowTextW(hwnd, title, 256)
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        handle = k32.OpenProcess(0x1000, False, pid.value)          # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ""
+        try:
+            path, size = ctypes.create_unicode_buffer(520), wintypes.DWORD(520)
+            if not k32.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(size)):
+                return ""
+        finally:
+            k32.CloseHandle(handle)
+        return app_kind(path.value, title.value)
+    except Exception:                                    # never let this stop dictation
+        return ""

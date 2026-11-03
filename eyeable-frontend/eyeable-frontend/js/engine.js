@@ -225,7 +225,9 @@
       case 'dictation_live': S.liveText = m.text || ''; render(); break;
       case 'dictation_preview': {
         const had = S.preview && S.preview.words.length, has = m.words && m.words.length;
-        S.preview = has ? { words: m.words, cleaned: !!m.cleaned, original: m.original || '' } : null;
+        // alternatives / uncertain: other readings from the trained clean-up model (optional; shown in a later step)
+        S.preview = has ? { words: m.words, cleaned: !!m.cleaned, original: m.original || '',
+                            alternatives: Array.isArray(m.alternatives) ? m.alternatives : [], uncertain: !!m.uncertain } : null;
         if (had && !has && performance.now() - lastTypeAt > 500) setTimeout(() => { if (performance.now() - lastTypeAt > 500) say('Dropped'); }, 450);
         render(); break;
       }

@@ -123,5 +123,48 @@ class TestRewriteWorker(unittest.TestCase):
         self.assertEqual(got, [{"id": 1, "clean": "OK", "used": True, "ms": 12.5}])
 
 
+class ContextRewriter:
+    """Like the Rewriter: takes the request's context and app, answers with other readings."""
+
+    takes_context = True
+
+    def __init__(self):
+        self.calls = []
+
+    def warm_up(self):
+        pass
+
+    def rewrite_full(self, text, context="", app=""):
+        from engine.voice.rewrite import RewriteOutcome
+
+        self.calls.append(("rewrite", text, context, app))
+        return RewriteOutcome(text, "Send the picture.", True, 9.0, None, "", ["Send the pitcher."], True)
+
+    def refine_full(self, marked, context="", app=""):
+        from engine.voice.rewrite import RewriteOutcome
+
+        self.calls.append(("refine", marked, context, app))
+        return RewriteOutcome(marked, marked, False, 9.0, "rejected")
+
+
+class TestHintsAndReadings(unittest.TestCase):
+    def test_context_and_app_go_in_and_other_readings_come_out(self):
+        bus, rw = FakeBus(), ContextRewriter()
+        w = RewriteWorker(bus, rw, log=lambda s: None)
+        w.process({"id": 3, "text": "send the pitcher", "context": "Here are the photos.", "app": "chat"})
+        self.assertEqual(rw.calls, [("rewrite", "send the pitcher", "Here are the photos.", "chat")])
+        self.assertEqual(bus.of(topics.REWRITE_RESULT)[-1],
+                         {"id": 3, "clean": "Send the picture.", "used": True, "ms": 9.0,
+                          "alternatives": ["Send the pitcher."], "uncertain": True})
+
+    def test_no_hints_no_new_fields_when_not_used(self):
+        bus, rw = FakeBus(), ContextRewriter()
+        w = RewriteWorker(bus, rw, log=lambda s: None)
+        w.process({"id": 4, "mode": "refine", "text": "a b", "marked": "a (?)b(?)"})
+        self.assertEqual(rw.calls, [("refine", "a (?)b(?)", "", "")])
+        self.assertEqual(bus.of(topics.REWRITE_RESULT)[-1],
+                         {"id": 4, "clean": "a (?)b(?)", "used": False, "ms": 9.0, "mode": "refine"})
+
+
 if __name__ == "__main__":
     unittest.main()

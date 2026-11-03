@@ -235,10 +235,12 @@ class CleanupModel:
         if not self.server.running:
             self.server.start()
 
-    def clean(self, text: str, max_s: float, max_tokens: int | None = None) -> tuple[Answer | None, bool]:
-        """(the parsed answer or None if it isn't valid JSON, cut_off: it hit the token cap)."""
+    def clean(self, text: str, max_s: float, max_tokens: int | None = None, before: str = "",
+              app: str = "") -> tuple[Answer | None, bool]:
+        """(the parsed answer or None if it isn't valid JSON, cut_off: it hit the token cap). `before` is what was
+        typed earlier in this dictation, `app` the kind of app in front: the prompt's "Before" and "App"."""
         n = max_tokens or min(900, 64 + 4 * len(text.split()))   # the JSON repeats the text, maybe twice
-        r = self.server.complete(build_prompt(text, self.words, prompt=self._prompt), n, max_s)
+        r = self.server.complete(build_prompt(text, self.words, app=app, before=before, prompt=self._prompt), n, max_s)
         cut_off = r.get("stop_type") == "limit" or bool(r.get("truncated"))
         return parse_answer(r.get("content", "")), cut_off
 

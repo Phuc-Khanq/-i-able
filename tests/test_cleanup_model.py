@@ -155,8 +155,9 @@ class FakeCleanup:
     def start(self):
         pass
 
-    def clean(self, text, max_s, max_tokens=None):
+    def clean(self, text, max_s, max_tokens=None, before="", app=""):
         self.sent.append(text)
+        self.hints = {"before": before, "app": app}
         raw = self.replies.get(text)
         return (parse_answer(raw) if raw else None), False
 
@@ -206,6 +207,26 @@ class TestLlamaCppBackend(unittest.TestCase):
         self.assertEqual(rw.words, ["Priya", "Dr. Lee"])
         self.assertTrue(rw.rewrite_full("tell pre a I'll be late").used)
 
+    def test_context_and_app_reach_the_model_and_the_guard(self):
+        rw, fake = llamacpp_rewriter({"forward it to doctor alvarez": reply("Forward it to Dr. Alvarez.")})
+        r = rw.rewrite_full("forward it to doctor alvarez", context="Thanks, Dr. Alvarez.", app="email")
+        self.assertEqual(fake.hints, {"before": "Thanks, Dr. Alvarez.", "app": "email"})
+        self.assertTrue(r.used)
+        # a name only the earlier text holds is not invented
+        rw, _ = llamacpp_rewriter({"tell him I'm late": reply("Tell Marcus I'm late.")})
+        self.assertFalse(rw.rewrite_full("tell him I'm late").used)
+        rw, _ = llamacpp_rewriter({"tell him I'm late": reply("Tell Marcus I'm late.")})
+        self.assertTrue(rw.rewrite_full("tell him I'm late", context="Marcus, are you coming?").used)
+
+    def test_other_readings_pass_the_guard_too(self):
+        rw, _ = llamacpp_rewriter({"order tick out from the Italian place": reply(
+            "Order takeout from the Italian place.",
+            ["Order takeout from the Italian place.", "Order gluten-free takeout from the Italian place.",
+             "Order takeaway from the Italian place."], True)})
+        r = rw.rewrite_full("order tick out from the Italian place")
+        self.assertTrue(r.uncertain)
+        self.assertEqual(r.alternatives, ["Order takeaway from the Italian place."])   # same as text: dropped;
+                                                                                          # "gluten-free" adds content
     def test_close_stops_the_server(self):
         rw, fake = llamacpp_rewriter({})
         rw.close()

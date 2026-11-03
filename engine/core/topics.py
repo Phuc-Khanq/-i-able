@@ -31,9 +31,13 @@ TRANSCRIPT = "voice.transcript"     # {"text": str, "words": [{"text", "conf"}],
 DELETE_VOICE_DATA = "voice.delete_data"  # {} (mode manager -> voice_data, after a confirm)
 
 # Dictation clean-up (mode manager <-> engine/voice/rewrite.py RewriteWorker)
-REWRITE_REQUEST = "dictation.rewrite_request"  # {"id": int, "text": str}, each time the preview text changes
+REWRITE_REQUEST = "dictation.rewrite_request"  # {"id": int, "text": str}, each time the preview text changes.
+                                               # Optional: "context" (what was typed earlier in this dictation),
+                                               # "app" (the kind of app in front: "email", "Slack", "document" ...),
+                                               # and for a refine "mode": "refine" and "marked"
 REWRITE_RESULT = "dictation.rewrite_result"    # {"id": int, "clean": str, "used": bool, "ms": float}; clean is
-                                               # the original text when used is False
+                                               # the original text when used is False. Optional, trained model only:
+                                               # "alternatives" (list of str) and "uncertain" (bool)
 
 # Look-and-say (mode manager <-> screen_target)
 TARGET_REQUEST = "target.request"   # TargetRequest (snap=True: no name, the clickable thing at the point)
