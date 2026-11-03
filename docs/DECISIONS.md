@@ -122,6 +122,29 @@ Choices made: training uses the short prompt `prompts/cleanup_t1_short.txt` (abo
 Honest limits: the dev cases are no longer a fair test. The training data was written after seeing dev's failures, and the epoch was picked on dev. Only a fresh hidden test set gives a number to trust. The adapter (about 120 MB, `checkpoints/cleanup/full1/adapter`) and the data (`data/cleanup_train/`) are git-ignored; the code to rebuild both is committed. Built on Claude-written data: see the 2026-11-02 terms entry.
 Evidence: `eval/dictation_cleanup/reviews/2026-11-03_dev_full1_score.md`, `..._dev_pilot_score.md`, run folders `runs/2026-11-03_Qwen3.5-4B-full1*` and `runs/2026-11-03_Qwen3.5-4B_cleanup_t1_short`. Decided by: Claude, inside the training run Khang approved; Khang to confirm.
 
+**2026-11-03. llama.cpp (MIT) runs the trained clean-up model; build b11960 downloaded.**
+llama.cpp v0.8.0, its stable release of 2026-10-28 (build b11960, commit 8642541b). Downloaded with Khang's OK for the speed check: the Windows CUDA 13.4 build (165 MB), its CUDA runtime zip (424 MB) and the source of the same tag (41 MB; its converter turns a Hugging Face model into a GGUF file and reads Qwen3.5). The SHA-256 of both binary zips matched the digests GitHub publishes. Kept in `downloads/llama.cpp/b11960/` (git-ignored). No new Python package: the converter's needs were already in `.venv`, and gguf-py comes with the source.
+Licence: MIT (`LICENSE` at the v0.8.0 tag, github.com/ggml-org/llama.cpp, checked 2026-11-03). Not open source: the runtime zip holds NVIDIA's `cudart64_13.dll`, `cublas64_13.dll` and `cublasLt64_13.dll`, under NVIDIA's CUDA licence (PyTorch already ships the same kind of files). Their terms for shipping them inside our installer are not checked yet: one more question for the lawyer before they ship.
+Decided by: Khang (approved the speed check).
+
+**2026-11-03. full1 in llama.cpp: the same model, about 5x faster, under the 1.5 s budget.**
+How: `engine/voice/cleanup_train/export.py` merges the adapter into Qwen3.5-4B on the CPU (bf16, as the eval did), converts it with llama.cpp's converter (`--no-mtp`: the text-only model has no multi-token-prediction head) and quantizes it: bf16 8.42 GB, Q8_0 4.48 GB, Q4_K_M 2.71 GB. The eval's new `llamacpp` backend runs llama-server on 127.0.0.1 only, offline, every layer on the GPU, 4096-token context, one slot. It sends the prompt as Hugging Face token ids and uses the same sampling as the transformers runs, in transformers' order. Measured on the 5080 with the engine off, dev (67 cases), warm:
+
+| full1, dev | p50 / p90 / p99 (ms) | GPU (GB) | Automatic | Silent guess | Over-edit | Full pass (Khang's rule) |
+| --- | --- | --- | --- | --- | --- | --- |
+| transformers bf16 (reviewed earlier today) | 1770 / 2070 / 2237 | 8.61 | 64/67 | 1/10 | 0/10 | 62/67 |
+| llama.cpp bf16 | 488 / 565 / 603 | 9.15 | 63/67 | 0/10 | 0/10 | 59/67 |
+| llama.cpp Q8_0 | 328 / 378 / 412 | 5.06 | 63/67 | 0/10 | 0/10 | 59/67 |
+| llama.cpp Q4_K_M | 264 / 292 / 332 | 3.25 | 64/67 | 0/10 | 0/10 | 61/67 |
+| greedy, transformers bf16 | 2236 / 2643 / 2961 | 8.61 | 64/67 | 0/10 | 0/10 | 61/67 |
+| greedy, llama.cpp Q8_0 | 336 / 398 / 461 | 5.04 | 64/67 | 0/10 | 0/10 | 61/67 |
+
+0 invented and 0 broken answers in every run. GPU: for transformers, torch's peak; for llama.cpp, nvidia-smi for the whole card at the end of the run minus before the server started (Windows gives no per-process number), so it includes the context cache and is approximate. llama-server loads the Q8_0 file in about 3 s.
+Same model, different luck: with greedy decoding (always the most likely token, no sampling), llama.cpp bf16 gave exactly the same answer as transformers on all 67 cases, and Q8_0 differed on 1 (S19, same meaning). With sampling (temperature 0.7) 15 answers differ between the two engines, because their random draws differ; bf16 and Q8_0 inside llama.cpp differ on only 1. So 62 against 59 is sampling luck, not a loss. M16, M25, S28 and X01 fail in every run; S11, S19, S29, X08 and A08 come and go with the draw.
+Also checked: llama.cpp's own tokenizer gives the same ids as Hugging Face's on all 67 dev prompts, so an app can send plain text. The server log holds timings only, no dictated text. llama-server warns that it has no API key and accepts requests from any web page: an app must give it an API key and keep it on 127.0.0.1.
+Review: Claude with Khang's rule; outputs judged before keep their answers.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-03_dev_llamacpp_score.md` and `..._dev_greedy_score.md`, run folders `runs/2026-11-03_full1-*` and `runs/2026-11-03_Qwen3.5-4B-full1-greedy_cleanup_t1_short`. Decided by: measured in the speed check Khang approved; which file and decoding the app uses is Khang's call (Proposed, below).
+
 ---
 
 ## Proposed, not yet agreed
@@ -132,3 +155,4 @@ Evidence: `eval/dictation_cleanup/reviews/2026-11-03_dev_full1_score.md`, `..._d
 - Tiers: light model by default on weak laptops, heavier model where the GPU allows.
 - (2026-11-02) The pass bar for the clean-up holdout run: 0 invented facts, 0 of 5 clean controls changed, 0 of 5 ambiguous cases resolved silently, 0 main readings that flip a negation or change a number, name or date, 0 broken answers, full human pass at least 27 of 33 and at least 15 points above today's app, p90 at most 1.5 s on the 5080 for the quick clean-up (6 s for the refine only). Details: `docs/plans/2026-11-02_dictation_cleanup_plan.md`, section 3. The holdout is not run until this is agreed.
 - (2026-11-02) Run the new clean-up on llama.cpp with 4-bit GGUF files for speed and GPU memory (plan, section 2).
+- (2026-11-03) The clean-up runs in llama.cpp with the Q8_0 file on NVIDIA GPUs (no measurable loss against bf16, 4.5 GB, p90 0.38 s on the 5080) and greedy decoding (the same answer every time for the same words; 61/67 on dev, inside the 59 to 62 of the sampled runs). Q4_K_M (2.7 GB, 61/67 sampled) where memory is tight, once timed on a low-end laptop.

@@ -67,7 +67,7 @@ Each step is its own pull request, tested with `scripts\run_demo.ps1` on the ref
 ## 5. Open questions
 
 1. Is 1.5 s the right budget, or may the quick clean-up wait longer?
-2. Option B (llama.cpp) for speed: OK to download a Windows build and the 4-bit files (4B 2.74 GB)?
+2. ~~Option B (llama.cpp) for speed: OK to download a Windows build and the 4-bit files (4B 2.74 GB)?~~ Yes (2026-11-03): llama.cpp b11960; the GGUF files are made from full1 (section 6), so no model was downloaded.
 3. Where do alternatives come from (section 4.4)? This decides how much of the gain the app keeps.
 4. ~~The pass bar in section 3~~: agreed 2026-11-02.
 5. Test case M25 (the product name) after the rename.
@@ -84,5 +84,7 @@ Prompting stopped at v4 (dev 88%, holdout 67%). Training: `engine/voice/cleanup_
 | Human full pass (Khang's rule) | 17/67 | 59/67 | not reviewed | 59/67 | **62/67 (93%)** |
 | Latency p50 / p90 (ms) | 435 / 573 | 2036 / 2449 | 1754 / 2050 | 2662 / 3041 (unmerged) | 1770 / 2070 (merged) |
 
-Dev is now tuned on: the data was written after seeing its failures. Next: a fresh hidden set of about 35 cases written by Khang or Hung, run once with full1; more real-sounding data where full1 still fails (curt orders, names on the word list); speed (llama.cpp or the fast kernels) for the 1.5 s budget.
+Dev is now tuned on: the data was written after seeing its failures. Next: a fresh hidden set of about 35 cases written by Khang or Hung, run once with full1; more real-sounding data where full1 still fails (curt orders, names on the word list).
+
+**Speed (2026-11-03): llama.cpp.** full1 exported to GGUF (`engine/voice/cleanup_train/export.py`) and run with `--backend llamacpp`: Q8_0 p50/p90 328/378 ms on the 5080 (bf16 488/565, Q4_K_M 264/292), against 1770/2070 in transformers. That is under the 1.5 s quick clean-up budget. Same model: with greedy decoding, llama.cpp bf16 gives the same answers as transformers on all 67 dev cases; with sampling the full pass moves between 59 and 62 with the random draw. Full numbers: DECISIONS.md, 2026-11-03. Next for speed: the app's runtime (section 4.1), with llama-server on 127.0.0.1 and an API key.
 
