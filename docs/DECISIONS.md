@@ -78,3 +78,5 @@ Decided by: Claude while building; Khang to confirm.
 - The clean-up gets Whisper's top candidates, the last text typed, the app and the user's word list as input.
 - The guard changes from "reject if the text differs a lot" to "reject if it adds facts nobody said".
 - Tiers: light model by default on weak laptops, heavier model where the GPU allows.
+- (2026-11-02) The pass bar for the clean-up holdout run: 0 invented facts, 0 of 5 clean controls changed, 0 of 5 ambiguous cases resolved silently, 0 main readings that flip a negation or change a number, name or date, 0 broken answers, full human pass at least 27 of 33 and at least 15 points above today's app, p90 at most 1.5 s on the 5080 for the quick clean-up (6 s for the refine only). Details: `docs/plans/2026-11-02_dictation_cleanup_plan.md`, section 3. The holdout is not run until this is agreed.
+- (2026-11-02) Run the new clean-up on llama.cpp with 4-bit GGUF files for speed and GPU memory (plan, section 2).
