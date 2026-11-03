@@ -151,6 +151,57 @@ class AdapterLabelTest(unittest.TestCase):
         self.assertIn("Heard: um hi", msgs[1]["content"])
         self.assertLess(len(msgs[0]["content"]), 400)
 
+class BigSetTest(unittest.TestCase):
+    """The big data set (bigset.py): sizes, the split by sentence, and the test cases' fields."""
+
+    @classmethod
+    def setUpClass(cls):
+        from engine.voice.cleanup_train import bigset
+
+        cls.bigset = bigset
+        cls.train, cls.test, cls.notes = bigset.make(seed=11)
+
+    def test_sizes_and_mix(self):
+        self.assertEqual((len(self.train), len(self.test)), (7500, 2500))
+        cats = {c["category"] for c in self.test}
+        self.assertEqual(cats, set(self.bigset.MIX))
+        for cat, share in self.bigset.MIX.items():
+            n = sum(1 for c in self.test if c["category"] == cat)
+            self.assertLess(abs(n / 2500 - share), 0.03, cat)
+
+    def test_no_test_sentence_is_trained_on(self):
+        meant = lambda c: c["target"]["text"].lower()
+        self.assertFalse({meant(c) for c in self.test} & {meant(c) for c in self.train})
+        self.assertFalse({c["asr_best"] for c in self.test} & {c["asr_best"] for c in self.train})
+        self.assertTrue(all(c["side"] == "test" for c in self.test))
+        self.assertTrue(all(c["side"] == "train" for c in self.train))
+
+    def test_a_term_has_one_side_in_every_field(self):
+        b = self.bigset
+        both = [f for f in b.all_fields() if "potluck" in f.terms]
+        self.assertEqual(len(both), 2)                          # family_friends and community
+        sides = {b.sentence_side(f, "Bring a dish to the potluck.") for f in both}
+        self.assertEqual(sides, {b.side("term:potluck")})
+
+    def test_test_cases_are_scorable(self):
+        for c in self.test:
+            for item in filter(None, c["must_keep"].split("|")):
+                self.assertIn(item.lower(), c["intended"].lower(), c)
+            if c["expected"] == "show_both":
+                self.assertIn(" || ", c["intended"])
+                self.assertTrue(c["target"]["uncertain"])
+            if c["kind"] == "cut_off":
+                last = c["asr_best"].split()[-1].lower()
+                self.assertIn(last, self.bigset.DANGLING, c["asr_best"])
+
+    def test_spacing_is_not_a_mishearing(self):
+        self.assertEqual(self.bigset.mishearings("carpool", ["car pool", "car pole"]), ["car pole"])
+
+    def test_must_keep_finds_names_and_numbers(self):
+        keep = self.bigset.keep_items("Ask Dr. Lee about the two pills on Friday.", ["pills"])
+        self.assertEqual(keep.split("|"), ["pills", "Lee", "two", "Friday"])
+
+
 class ExportTest(unittest.TestCase):
     """The llama.cpp export's commands and file names (llama.cpp itself isn't run)."""
 
