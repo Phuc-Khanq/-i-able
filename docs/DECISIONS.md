@@ -86,6 +86,10 @@ Decided by: Khang (Q4: A, after comparing "never" with "allowed if marked unsure
 Khoi is on other work. Khang fills in the `_Khang` columns of the review sheets for dev and holdout, and the `_Khoi` columns stay empty. This replaces "scored by Khang and Khoi, who agree one answer per case" in the pass bar above; everything else in the bar stays. The README's two-reviewer rule is paused, so there is no check on one person's judgement: the sheets stay blind (A/B in random order) to limit bias. A second reviewer can join later without changing the sheets.
 Decided by: Khang.
 
+**2026-11-02. Khang's rule for "meaning kept", and Claude does the review work from now on.**
+Rule, in Khang's words, roughly: filler, repeats and changes of mind can go; the output passes if it carries the main ideas of what the person wanted to say, as complete enough sentences, polite and meaningful. The exact order and structure don't matter. Khang filled in "meaning kept" for the dev sheet himself (2026-11-02_dev). Claude filled in "nothing invented" for that sheet: every row's notes say so. From now on Claude fills in both checks with this rule, and Khang spot-checks and has the final say. Risk: an AI is then judging an AI. Keep the sheets blind, and Khang should spot-check the "n" answers and the cases where Claude and the automatic checks disagree.
+Decided by: Khang.
+
 ---
 
 ## Proposed, not yet agreed
