@@ -189,6 +189,18 @@ FIXED_COMMANDS: dict[str, str] = {
     "use original": "use_original",
     "use the original": "use_original",
     "clean it up": "clean_up",
+    # The trained clean-up's other readings, numbered on the card: "option two" puts reading 2 in place of the text
+    "option one": "option_1",
+    "option 1": "option_1",
+    "first option": "option_1",
+    "option two": "option_2",
+    "option 2": "option_2",
+    "option to": "option_2",
+    "option too": "option_2",
+    "second option": "option_2",
+    "option three": "option_3",
+    "option 3": "option_3",
+    "third option": "option_3",
     # System controls (engine/eyes/os_output.py carries them out: media keys for volume, the laptop
     # screen's brightness through Windows)
     "volume up": "volume_up",
@@ -320,6 +332,9 @@ COMMAND_INFO: dict[str, tuple[str, str]] = {
     "undo": ("Dictation", "Drops the preview, or presses Ctrl+Z when none is showing"),
     "new_line": ("Dictation", "Starts a new line in the preview"),
     "use_original": ("Dictation", "Types your own words instead of the cleaned-up text"),
+    "option_1": ("Dictation", "Goes back to the clean-up's first reading, after \"option two\" or \"option three\""),
+    "option_2": ("Dictation", "When the card lists other readings: types reading 2 instead of the text shown"),
+    "option_3": ("Dictation", "When the card lists other readings: types reading 3 instead of the text shown"),
     "clean_up": ("Dictation", "Types the cleaned-up text again"),
     "yes": ("Answers", "Says yes to a waiting question, preview or search (types the preview). While one waits, "
                        "\"yea\", \"ya\" and \"yah\" count too"),
@@ -414,6 +429,8 @@ VERB_CUTOFF = 75
 EXACT_ONLY_BELOW = 6       # phrases shorter than this (chars) must match exactly
 # ...and these always: fuzzy matching made "I used the original" and "cleaning up" commands
 EXACT_ONLY = {"use original", "use the original", "clean it up", "stop clicking", "start clicking",
+              "option one", "option two", "option to", "option too", "option three", "first option", "second option",
+              "third option", "option 1", "option 2", "option 3",
               "scroll", "scroll mode", "start scrolling",
               # one word or close pairs: never fuzzy ("new tab" and "next tab", "louder" from "lower")
               "new tab", "new window", "next tab", "last tab", "louder", "quieter", "softer", "brighter", "dimmer", "darker",

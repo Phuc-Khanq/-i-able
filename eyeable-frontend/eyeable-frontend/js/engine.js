@@ -76,14 +76,18 @@
       hintEl.innerHTML = 'Blink or say <b>yes</b> · say <b>no</b> to cancel';
     } else if (S.preview && S.preview.words.length) {                  // 2. what will be typed
       const into = NAMES[destFor(S.preview.words.map(w => w.text).join(' '))];          // the mail window sits under the card, so say where the words will go
-      panel.hidden = false; lab.textContent = (S.preview.cleaned ? 'Will type (cleaned)' : 'Will type') + (into ? ' · into ' + into : '');
+      const opts = numberedOptions(S.preview);                          // the clean-up's other readings, if any
+      panel.hidden = false;
+      lab.textContent = (S.preview.uncertain ? 'Check this' : S.preview.cleaned ? 'Will type (cleaned)' : 'Will type') + (into ? ' · into ' + into : '');
       if (S.preview.cleaned && S.preview.original) { chip.hidden = false; chip.textContent = S.preview.original; }
       const all = S.preview.words, extra = Math.max(0, all.length - MAX_PREVIEW_WORDS), shownW = extra ? all.slice(-MAX_PREVIEW_WORDS) : all;   // a long passage: the last words, like the app's card
       body.innerHTML = (extra ? `<span class="more">… ${extra} earlier word${extra === 1 ? '' : 's'}</span> ` : '')
         + shownW.map(w => `<span class="${w.conf !== undefined && w.conf < SHAKY_CONF ? 'shaky' : ''}">${esc(w.text)}</span>`).join(' ')
-        + (S.liveText ? ` <span class="live">${esc(S.liveText)}</span>` : '');
+        + (S.liveText ? ` <span class="live">${esc(S.liveText)}</span>` : '')
+        + opts.map(([n, t]) => `<br><span class="more">“option ${OPT_WORDS[n]}” · ${esc(t)}</span>`).join('');
       acts.innerHTML = '<button class="main" data-act="dz:insert">Type it</button><button data-act="dz:discard">Drop it</button>'
-        + (S.preview.cleaned ? '<button data-act="dz:original">Use original</button>' : '');
+        + (S.preview.cleaned ? '<button data-act="dz:original">Use original</button>' : '')
+        + opts.map(([n]) => `<button data-act="dz:opt${n}">Option ${n}</button>`).join('');
       hintEl.innerHTML = 'Blink or say <b>yes</b> · say <b>no</b> to drop it';
     } else if (S.liveText) {                                           // 3. hearing
       panel.hidden = false; lab.textContent = 'Hearing';
@@ -227,7 +231,8 @@
         const had = S.preview && S.preview.words.length, has = m.words && m.words.length;
         // alternatives / uncertain: other readings from the trained clean-up model (optional; shown in a later step)
         S.preview = has ? { words: m.words, cleaned: !!m.cleaned, original: m.original || '',
-                            alternatives: Array.isArray(m.alternatives) ? m.alternatives : [], uncertain: !!m.uncertain } : null;
+                            alternatives: Array.isArray(m.alternatives) ? m.alternatives : [], uncertain: !!m.uncertain,
+                            choice: m.choice || 1 } : null;
         if (had && !has && performance.now() - lastTypeAt > 500) setTimeout(() => { if (performance.now() - lastTypeAt > 500) say('Dropped'); }, 450);
         render(); break;
       }
@@ -269,7 +274,17 @@
     else if (v === 'insert') send('dictation', { action: 'insert' });
     else if (v === 'discard') send('dictation', { action: 'discard' });
     else if (v === 'original') send('dictation', { action: 'use_original' });
+    else if (/^opt[123]$/.test(v)) send('dictation', { action: 'use_option', option: +v.slice(3) });
   };
+
+  /* The clean-up's other readings, numbered as "option two" picks them: readings count from 1 (the model's) without
+     gaps, and the one shown (choice) isn't among the alternatives (engine/core/messages.py, dictation_preview). */
+  const OPT_WORDS = { 1: 'one', 2: 'two', 3: 'three' };
+  function numberedOptions(p) {
+    const alts = (p.alternatives || []).filter(a => String(a).trim()), shown = p.choice || 1, nums = [];
+    for (let n = 1; n <= alts.length + 1; n++) if (n !== shown) nums.push(n);
+    return alts.map((a, i) => [nums[i], a]).filter(([n]) => OPT_WORDS[n]).slice(0, 2);
+  }
 
   /* ---------- page_action: typing, keys, scroll, undo and "open ..." on the simulated desktop ---------- */
   const typed = [];            // {field, text} so "undo" can take back the last dictated chunk

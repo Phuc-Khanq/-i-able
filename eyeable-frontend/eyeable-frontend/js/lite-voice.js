@@ -210,6 +210,7 @@
         case 'undo': if (S.chunks.length) { dropPreview(); say('Dropped'); } else { hooks.act({ action: 'undo' }); say('Undo'); } return;
         case 'new_line': if (S.mode === 'dictation') { S.chunks.push('\n'); showPreview(); } return;
         case 'use_original': case 'clean_up': if (S.chunks.length) insert(); else status('Lite mode has no clean-up model; your own words are typed.'); return;
+        case 'option_1': case 'option_2': case 'option_3': status('Lite mode has no clean-up model, so there are no other readings.'); return;
         case 'yes': if (!answer(true)) status('Nothing is waiting for a yes.'); return;
         case 'no': if (!answer(false)) status('Nothing is waiting for a no.'); return;
         case 'cancel': if (!answer(false)) hooks.act({ action: 'key', key: 'esc' }); say('Cancel'); return;

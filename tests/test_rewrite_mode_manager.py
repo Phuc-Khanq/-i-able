@@ -228,6 +228,59 @@ class TestHintsAndReadings(Base):
         self.assertEqual(set(self.preview()), {"type", "words", "original", "cleaned"})
 
 
+class TestPickAReading(Base):
+    def answer_with_readings(self):
+        self.dictating("send the pitcher to mom")
+        req = self.requests()[-1]
+        self.bus.publish(topics.REWRITE_RESULT, {"id": req["id"], "clean": "Send the picture to Mom.", "used": True,
+                                                 "ms": 300.0, "alternatives": ["Send the pitcher to Mom."],
+                                                 "uncertain": True})
+
+    def test_option_two_shows_and_types_the_other_reading(self):
+        self.answer_with_readings()
+        self.say("option two")
+        p = self.preview()
+        self.assertEqual((self.shown(), p["choice"], p["alternatives"]),
+                         ("Send the pitcher to Mom.", 2, ["Send the picture to Mom."]))
+        self.say("option one")
+        self.assertEqual((self.shown(), self.preview().get("choice")), ("Send the picture to Mom.", None))
+        self.say("option 2")
+        self.say("yes")
+        self.assertEqual(self.typed(), ["Send the pitcher to Mom. "])
+
+    def test_no_such_option(self):
+        self.dictating("um hello")
+        self.answer("Hello.")
+        self.say("option three")
+        self.assertEqual(self.shown(), "Hello.")
+        self.assertIn("no option three", self.bus.ui(messages.STATUS)[-1]["text"])
+
+    def test_a_refine_after_a_pick_does_not_replace_it(self):
+        self.answer_with_readings()
+        self.say("option two")
+        self.assertEqual(self.shown(), "Send the pitcher to Mom.")
+        self.bus.publish(topics.REWRITE_RESULT, {"id": self.mm._rf_id - 1, "mode": "refine",
+                                                 "clean": "Send the photo to Mom.", "used": True, "ms": 900.0})
+        self.assertEqual(self.shown(), "Send the pitcher to Mom.")
+
+    def test_the_websites_option_button(self):
+        self.answer_with_readings()
+        self.bus.publish(topics.from_ui(messages.DICTATION), {"type": "dictation", "action": "use_option", "option": 2})
+        self.assertEqual(self.shown(), "Send the pitcher to Mom.")
+        self.bus.publish(topics.from_ui(messages.DICTATION), {"type": "dictation", "action": "use_option", "option": 9})
+        self.assertEqual(self.shown(), "Send the pitcher to Mom.")                         # ignored
+
+    def test_only_exact_words_pick(self):
+        from engine.voice import commands
+
+        for said, name in (("option two", "option_2"), ("Option 3.", "option_3"), ("option to", "option_2"),
+                           ("second option", "option_2")):
+            self.assertEqual(commands.parse(said).name, name, said)
+        for said in ("option four", "I have an option to buy", "options"):
+            cmd = commands.parse(said)
+            self.assertFalse(cmd and cmd.name.startswith("option_"), said)
+
+
 class TestSwitchingVersions(Base):
     def test_use_original_then_clean_it_up(self):
         self.dictating("um so I I think we should uh go")

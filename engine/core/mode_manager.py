@@ -207,6 +207,7 @@ class ModeManager:
         self.app_name: Callable[[], str] = lambda: ""
         self._typed = ""                         # what this dictation typed so far (the last CONTEXT_CHARS)
         self._readings: dict[str, tuple[list[str], bool]] = {}   # "clean" / "refined" -> (alternatives, uncertain)
+        self._choice = 1                         # which reading shows: 1 the model's, 2 and 3 its other readings
         self._lock = threading.RLock()
         self._stop = threading.Event()
 
@@ -513,6 +514,8 @@ class ModeManager:
                 self._discard_preview()
             elif action == "use_original":     # the card's "Use original": show the user's own words, not the clean-up
                 self._do(Command(name="use_original"))
+            elif action == "use_option" and msg.get("option") in (1, 2, 3):   # the website's "Option 2" button
+                self._do(Command(name=f"option_{msg['option']}"))
             elif action == "edit_word":
                 shown = self._shown_words()
                 i = msg.get("index", -1)
@@ -653,6 +656,17 @@ class ModeManager:
             if self.preview and self._use_clean:
                 self._use_clean = False
                 self._show_preview()
+        elif name in ("option_1", "option_2", "option_3"):
+            n = int(name[-1])
+            readings = self._reading_texts() if self.preview and self._cleaning() else []
+            if n > len(readings):
+                self._status("info", f"There's no option {('one', 'two', 'three')[n - 1]} for this text")
+                return
+            self._choice, self._use_clean = n, True
+            self._rf_due = None                            # a reading was picked: a later refine doesn't replace it
+            self._rf_id += 1
+            self._rf_running = False
+            self._show_preview()
         elif name == "clean_up":
             if not self.preview:
                 return
@@ -834,8 +848,19 @@ class ModeManager:
 
     def _shown_words(self) -> list[dict]:
         if self._cleaning() and self._use_clean and self._best_clean() is not None:
+            readings = self._reading_texts()
+            if 1 < self._choice <= len(readings):        # "option two": that reading is what "yes" types
+                return self._clean_words(readings[self._choice - 1])
             return self._best_clean()
         return self.preview
+
+    def _reading_texts(self) -> list[str]:
+        """The readings the card numbers: 1 the model's text, then its other readings (the trained model only)."""
+        best = self._best_clean()
+        if best is None:
+            return []
+        alts, _ = self._readings.get("refined" if self._refined is not None else "clean", ([], False))
+        return [" ".join(w["text"] for w in best), *alts]
 
     def _preview_changed(self, clean_up: bool = True) -> None:
         """self.preview just changed: the old clean text and any waiting insert no longer apply.
@@ -844,6 +869,7 @@ class ModeManager:
         self._clean = None
         self._refined = None
         self._readings = {}
+        self._choice = 1
         self._rf_id += 1                                   # a refine of older text is ignored too
         self._rf_running = False
         self._rf_due = None
@@ -885,11 +911,16 @@ class ModeManager:
         if not self._cleaning():
             self._ui(messages.DICTATION_PREVIEW, words=list(self.preview))   # exactly as before
         elif self._best_clean() is not None and self._use_clean:
-            alts, unsure = self._readings.get("refined" if self._refined is not None else "clean", ([], False))
-            extra = {"alternatives": alts} if alts else {}
+            _, unsure = self._readings.get("refined" if self._refined is not None else "clean", ([], False))
+            readings = self._reading_texts()
+            shown = self._choice if self._choice <= len(readings) else 1
+            others = [r for n, r in enumerate(readings, 1) if n != shown]   # in number order, without the shown one
+            extra = {"alternatives": others} if others else {}
+            if shown != 1:
+                extra["choice"] = shown
             if unsure:
                 extra["uncertain"] = True
-            self._ui(messages.DICTATION_PREVIEW, words=list(self._best_clean()),
+            self._ui(messages.DICTATION_PREVIEW, words=list(self._shown_words()),
                      original=" ".join(w["text"] for w in self.preview), cleaned=True, **extra)
         else:
             self._ui(messages.DICTATION_PREVIEW, words=list(self.preview), cleaned=False)

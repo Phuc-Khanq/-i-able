@@ -373,5 +373,50 @@ class TestDictateFixes(Base):
         self.assertEqual(self.mm.mode, Mode.DICTATION)
 
 
+class TestOtherReadings(unittest.TestCase):
+    """The trained clean-up's other readings: numbered from 1 (the model's), the shown one left out."""
+
+    def test_numbers(self):
+        from engine.eyes.dictation_card import numbered_options
+
+        self.assertEqual(numbered_options({"alternatives": ["B.", "C."]}), [(2, "B."), (3, "C.")])
+        self.assertEqual(numbered_options({"alternatives": ["A.", "C."], "choice": 2}), [(1, "A."), (3, "C.")])
+        self.assertEqual(numbered_options({"alternatives": ["B.", "C.", "D."]}), [(2, "B."), (3, "C.")])  # two at most
+        self.assertEqual(numbered_options({}), [])
+
+    def test_unsure_says_check_this_and_lists_them(self):
+        m = CardModel(Clock())
+        m.on_ui(preview("Send", "the", "picture.", cleaned=True, original="send the pitcher",
+                        alternatives=["Send the pitcher."], uncertain=True))
+        v = m.view()
+        self.assertEqual((v.label, v.options), ("Check this", [(2, "Send the pitcher.")]))
+        m.on_ui(preview("Send", "the", "picture.", cleaned=True, original="send the pitcher"))
+        self.assertEqual((m.view().label, m.view().options), ("Will type", []))
+
+    def test_the_list_makes_the_panel_taller(self):
+        from engine.eyes import dictation_card as D
+
+        class Canvas:
+            n = 0
+            def delete(self, _): pass
+            def find_all(self): return list(range(self.n))
+            def tag_lower(self, *a): pass
+            def _add(self, *a, **k):
+                self.n += 1
+                return self.n
+            create_polygon = create_text = create_oval = create_rectangle = create_line = create_arc = _add
+
+        class F:
+            def measure(self, t): return 8 * len(t)
+            def metrics(self, _): return 20
+        fonts = {k: F() for k in ("pill", "pill_hint", "label", "chip", "body", "shaky", "action", "hint", "key")}
+        base = dict(pill="Dictation", label="Will type", words=[("Send", False), ("it.", False)],
+                    actions=["type", "drop"], keys=True)
+        plain = D.draw(Canvas(), D.View("preview", **base), (0.0,) * D.WAVE_BARS, fonts)
+        listed = D.draw(Canvas(), D.View("preview", options=[(2, "Send them."), (3, "Sent it.")], **base),
+                        (0.0,) * D.WAVE_BARS, fonts)
+        self.assertGreater(listed, plain)
+
+
 if __name__ == "__main__":
     unittest.main()

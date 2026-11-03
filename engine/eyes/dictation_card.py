@@ -18,7 +18,8 @@ States, first match wins:
              contains the preview's text, so it beats the preview. Stays until the engine closes it.
   preview    "Will type": the words waiting to be typed (unsure words in amber, underlined), your own words in
              the chip, "Type it / Drop it / Use original", and "blink or say yes" in the hint field. Stays until
-             it is typed or dropped.
+             it is typed or dropped. With the trained clean-up model, its other readings are listed under the text
+             with the words that pick them ("option two"), and "Check this" replaces "Will type" when it is unsure.
   live       "Hearing": what Whisper hears so far of the sentence being spoken, in grey, about once a second. With
              a preview waiting it follows the preview's words ("Will type"), so you see everything at once; the
              finished words replace it (refined text later replaces those). Dictation mode only.
@@ -101,6 +102,7 @@ class View:
     words: list = field(default_factory=list)  # [(text, shaky)]: the text that will be typed; shaky True = unsure
                                                # (amber), "live" = still being heard (grey)
     body: str = ""                             # plain large text (done)
+    options: list = field(default_factory=list)  # [(number, text)]: the clean-up's other readings, picked by voice
     actions: list = field(default_factory=list)  # ["type", "drop", "original"]
     keys: bool = False                         # the hint field with "yes" / "no" key caps
     hint_yes: str = "to type"                  # after the "yes" key cap
@@ -116,6 +118,22 @@ class View:
 def shorten(text: str, n: int = CHIP_MAX_CHARS) -> str:
     text = " ".join(text.split())
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+
+OPTION_WORDS = {1: "one", 2: "two", 3: "three"}   # the spoken command for each number (engine/voice/commands.py)
+MAX_OPTIONS = 2                                     # at most two other readings on the card
+
+
+def numbered_options(msg: dict) -> list[tuple[int, str]]:
+    """[(number, text)] of a preview's other readings. Readings are numbered from 1 (the model's) without gaps;
+    the one shown (choice, default 1) isn't in alternatives, so the others keep their numbers around it."""
+    alts = [str(a) for a in (msg.get("alternatives") or []) if str(a).strip()]
+    try:
+        shown = int(msg.get("choice") or 1)
+    except (TypeError, ValueError):
+        shown = 1
+    numbers = [n for n in range(1, len(alts) + 2) if n != shown]
+    return [(n, a) for n, a in zip(numbers, alts) if n in OPTION_WORDS][:MAX_OPTIONS]
 
 
 def shorten_prompt(prompt: str) -> str:
@@ -149,6 +167,8 @@ class CardModel:
         self.heard_outside_dictation = heard_outside_dictation
         self.preview: list[dict] = []
         self.original = ""
+        self.options: list[tuple[int, str]] = []     # the clean-up's other readings, numbered as "option two" picks
+        self.unsure = False
         self.mode = "pointer"
         self.heard, self._heard_at = "", float("-inf")
         self.live, self._live_at = "", float("-inf")     # what is being heard right now (dictation_live)
@@ -180,6 +200,8 @@ class CardModel:
                 self._done, self._done_at = ("Typed" if self._last_typed else "Dropped"), now
             self.preview = words
             self.original = str(msg.get("original", "")) if msg.get("cleaned") else ""
+            self.options = numbered_options(msg)
+            self.unsure = bool(msg.get("uncertain")) and bool(words)
             self._last_typed = False
         elif kind == messages.DICTATION_LIVE:
             self.live, self._live_at = " ".join(str(msg.get("text", "")).split()), now
@@ -243,9 +265,9 @@ class CardModel:
                         **base)
         if self.preview:
             chip = self.original or (self.heard if now - self._heard_at <= 30 else "")
-            return View("preview", label="Will type", chip=shorten(chip),
+            return View("preview", label="Check this" if self.unsure else "Will type", chip=shorten(chip),
                         words=[(w["text"], float(w.get("conf", 1.0)) < SHAKY_CONF) for w in self.preview]
-                        + self._live_words(now),
+                        + self._live_words(now), options=list(self.options),
                         actions=["type", "drop"] + (["original"] if self.original else []), keys=True, **base)
         live = self._live_words(now)
         if live:
@@ -472,6 +494,16 @@ def draw(c, v: View, levels, fonts) -> int:
                               font=fonts["shaky" if shaky is True else "body"], anchor="nw")
             y += line_h
         y += 10
+    if v.options:               # the clean-up's other readings: "option two" · the text, one line each
+        oh = fonts["hint"].metrics("linespace") + 6
+        for n, text in v.options:
+            cue = f"“option {OPTION_WORDS[n]}”"
+            c.create_text(x0 + PAD, y, text=cue, fill=TEXT, font=fonts["hint"], anchor="nw")
+            tx = x0 + PAD + fonts["hint"].measure(cue) + 10
+            c.create_text(tx, y, text=fit(text, fonts["hint"], x0 + w - PAD - tx), fill=MUTED, font=fonts["hint"],
+                          anchor="nw")
+            y += oh
+        y += 6
     if v.body:                  # wraps to the panel; a long one adds lines (the model keeps it short)
         item = c.create_text(x0 + PAD, y, text=v.body, fill=TEXT, font=fonts["body"], anchor="nw", width=inner)
         box = c.bbox(item)

@@ -33,8 +33,10 @@ LISTENING = "listening"                  # level 0-1, speaking true/false. About
 DICTATION_PREVIEW = "dictation_preview"  # words: [{"text": str, "conf": float}]; [] hides the bubble.
                                          # With the clean-up on, also cleaned: true|false; when true, words holds the
                                          # cleaned text and original the user's own words (a string). Optional, only
-                                         # with the trained clean-up model: alternatives (other readings it found,
-                                         # list of str) and uncertain: true when it isn't sure which one was meant
+                                         # with the trained clean-up model: alternatives (the other readings, list of
+                                         # str, in number order), uncertain: true when it isn't sure which was meant,
+                                         # and choice: the number of the reading in words when the user picked one
+                                         # ("option two"); readings are numbered from 1 (the model's) without gaps
 DICTATION_LIVE = "dictation_live"        # text: what Whisper hears so far of the sentence being spoken, updated about once a
                                          # second while the user talks (dictation mode only). "" clears it: the final
                                          # words (dictation_preview) are out, or the user stopped. Show it greyed
@@ -72,7 +74,7 @@ FIELDS: dict[str, tuple[set[str], set[str]]] = {
     CALIB_TARGET: ({"index", "x", "y", "total"}, set()),
     CALIB_RESULT: ({"error_px", "ok"}, set()),
     LISTENING: ({"level", "speaking"}, set()),
-    DICTATION_PREVIEW: ({"words"}, {"cleaned", "original", "alternatives", "uncertain"}),
+    DICTATION_PREVIEW: ({"words"}, {"cleaned", "original", "alternatives", "uncertain", "choice"}),
     DICTATION_LIVE: ({"text"}, set()),
     STATUS: ({"level", "text"}, set()),
     CONFIRM: ({"id", "prompt", "state", "expires_in_s"}, set()),
@@ -86,7 +88,8 @@ SET_MODE = "set_mode"                    # mode
 CALIBRATE = "calibrate"                  # action: "start" | "cancel"
 MENU_SELECT = "menu_select"              # item
 SETTINGS = "settings"                    # pause_seconds, dwell_ms, sensitivity
-DICTATION = "dictation"                  # action: "insert" | "discard" | "use_original" | "edit_word"
+DICTATION = "dictation"                  # action: "insert" | "discard" | "use_original" | "edit_word" |
+                                         # "use_option" (option: 1-3, a numbered reading of the clean-up)
 TARGET = "target"                        # action: "click" | "cancel"
 CONSOLE = "console"                      # open: true/false
 CONFIRM_ANSWER = "confirm_answer"        # id, yes: true/false (a button, same as nod / shake)
