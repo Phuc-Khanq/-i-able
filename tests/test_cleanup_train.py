@@ -151,5 +151,39 @@ class AdapterLabelTest(unittest.TestCase):
         self.assertIn("Heard: um hi", msgs[1]["content"])
         self.assertLess(len(msgs[0]["content"]), 400)
 
+class ExportTest(unittest.TestCase):
+    """The llama.cpp export's commands and file names (llama.cpp itself isn't run)."""
+
+    def test_labels(self):
+        from engine.voice.cleanup_train import export
+
+        self.assertEqual(export.label("full1"), "full1")
+        self.assertEqual(export.label("full1", "epoch2"), "full1-epoch2")
+
+    def test_conversion_leaves_out_the_mtp_head(self):
+        from unittest import mock
+
+        from engine.voice.cleanup_train import export
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(export.subprocess, "run") as fake:
+            out = export.to_gguf(Path(tmp) / "full1" / "merged", "full1")
+            cmd = fake.call_args.args[0]
+            self.assertEqual(out, Path(tmp) / "full1" / "gguf" / "full1-bf16.gguf")
+            self.assertTrue(out.parent.is_dir())
+        self.assertEqual(cmd[1], str(export.CONVERTER))
+        self.assertIn("--no-mtp", cmd)
+        self.assertEqual(cmd[cmd.index("--outtype") + 1], "bf16")
+
+    def test_quantized_file_is_named_by_type(self):
+        from unittest import mock
+
+        from engine.voice.cleanup_train import export
+
+        src = Path("x") / "gguf" / "full1-bf16.gguf"
+        with mock.patch.object(export.subprocess, "run") as fake:
+            out = export.quantize(src, "Q4_K_M")
+        self.assertEqual(out, Path("x") / "gguf" / "full1-q4_k_m.gguf")
+        self.assertEqual(fake.call_args.args[0], [str(export.QUANTIZE), str(src), str(out), "Q4_K_M"])
+
 if __name__ == "__main__":
     unittest.main()
