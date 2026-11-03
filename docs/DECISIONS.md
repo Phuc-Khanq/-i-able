@@ -162,6 +162,14 @@ Measured on full1's 2,500 test answers: it blocks 13. At least 6 are real failur
 Without other hearings (the app has none until the contract change), a homophone number fix ("to o'clock" -> "two o'clock") is blocked: numbers never change without evidence.
 Decided by: Claude, in step 2 of the app plan that Khang approved; Khang to confirm.
 
+**2026-11-03. Licence scan of the Python packages: one risk for the lawyer, the rest usable.**
+91 packages in `.venv` (88 used at run time, 2 training only), from each package's own licence files; bundled native libraries opened for `av`, `torch`, `opencv-contrib-python`, `soundfile` and `llvmlite`. Report: `docs/licences/2026-11-03_python_packages.md`.
+- Risk: PyAV (`av` 18.1.0), loaded whenever faster-whisper is imported, ships libx264 and libx265 (GPL-2.0-or-later) with its FFmpeg (FFmpeg itself reports LGPL-3.0-or-later). Our code doesn't use `av`. Options: a PyAV without x264/x265, not shipping `av` (only faster-whisper's file decoding needs it), or complying with the GPL. For Khang and the lawyer.
+- Conditions, normal for sold software: LGPL (`pynput`, `soxr`, libsndfile in `soundfile`, FFmpeg in `av` and OpenCV): ship them unchanged as separate libraries with their licence texts. MPL-2.0 (`certifi`, `tqdm`). NVIDIA runtime files inside PyTorch's CUDA build: the same question as llama.cpp's (lawyer).
+- The other 83 are permissive (MIT, BSD, Apache-2.0, ISC, PSF ...); `llvmlite` declares nothing in metadata but its LICENSE file is BSD-2-Clause.
+- Closed: Silero VAD is MIT (LICENSE file and README on GitHub, checked 2026-11-03); the "CC BY-NC 4.0" was the hover text of a badge that reads MIT.
+Not legal advice. Decided by: scan by Claude at Khang's request; what to do about PyAV is Khang's call with the lawyer.
+
 ---
 
 ## Proposed, not yet agreed
