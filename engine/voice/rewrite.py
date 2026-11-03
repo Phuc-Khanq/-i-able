@@ -4,8 +4,11 @@ starts go, punctuation and capitals get fixed, and the meaning stays.
 Route: Khoi and Khoa (Khoi leads)
 Publishes: topics.REWRITE_RESULT {"id", "clean", "used", "ms"} (RewriteWorker)
 Subscribes: topics.REWRITE_REQUEST {"id", "text"} (from the mode manager)
-APIs: transformers AutoModelForCausalLM / AutoTokenizer, Qwen/Qwen2.5-1.5B-Instruct (Apache 2.0),
-      greedy decoding. Runs on this laptop; nothing leaves it (CONTRIBUTING rule 10).
+APIs: settings.rewrite_backend picks the model. "transformers": AutoModelForCausalLM / AutoTokenizer with
+      settings.rewrite_model (today Qwen2.5-3B-Instruct, Qwen Research License: to be replaced before anything
+      is sold). "llamacpp": our trained clean-up model (Qwen3.5-4B + adapter, Apache 2.0 base) in llama-server,
+      see cleanup_model.py, with its own guard, check_cleanup. Greedy decoding either way. Runs on this laptop;
+      nothing leaves it (CONTRIBUTING rule 10).
 
 Safety first: a small model sometimes answers, summarizes or drops a fact. check_rewrite()
 compares the rewrite with the original and rejects it if a number or name went missing, too much
@@ -254,6 +257,108 @@ def check_refine(original: str, refined: str, unsure: set[str] | None = None) ->
     return None
 
 
+# ------------------------------------------------------------------ the trained model's guard
+# The trained clean-up model (cleanup_model.py, rewrite_backend "llamacpp") is meant to fix misheard words, broken
+# sentences and changes of mind, so it isn't held to word-for-word closeness like check_rewrite. It is stopped
+# where a quick look at the preview could miss harm: a number, name or negation nobody said, one the speaker said
+# that is gone without a change of mind, or most of the words gone.
+CHANGE_OF_MIND = re.compile(r"\b(no|nope|sorry|i mean|wait|actually|scratch that|oops|rather|make that)\b",
+                            re.IGNORECASE)
+CLEANUP_MIN_LENGTH_RATIO = 0.5     # of the words left once fillers and stutters are out (light_clean)
+CLEANUP_MAX_LENGTH_RATIO = 2.5     # broken speech gets its small words back: "hungry now food please"
+
+
+SOUND_ALIKE = 0.8                  # a new capitalized word this close to what was heard is a fix, not a new name
+TITLES = {"dr", "mr", "mrs", "ms", "prof", "st", "jr", "sr"}             # "doctor" -> "Dr." isn't a new name
+CLEANUP_MIN_KEPT = 0.6             # share of the distinct words said that are still there...
+CLEANUP_MIN_KEPT_CHANGED = 0.4     # ...or after a change of mind ("turn left, sorry, right" drops "left")
+
+
+def _content_kept(original: str, clean_w: list[str]) -> tuple[float, int]:
+    """(share of the original's distinct content words still in the clean text, how many there were). A word
+    counts as kept when it's spelled close ("insteed" / "instead") or sits inside a fixed term ("bus" in
+    "syllabus"): the recognizer's spelling isn't the speaker's word."""
+    from difflib import SequenceMatcher
+
+    said = {w for w in _content(normalize_words(light_clean(original))) - FILLERS if len(w) > 2}   # not "p-"
+    if not said:
+        return 1.0, 0
+    have = _content(clean_w)
+    joined = "".join(have)
+
+    def kept(w: str) -> bool:
+        if w in have or (len(w) >= 3 and w in joined):
+            return True
+        return any(SequenceMatcher(a=w, b=c).ratio() >= 0.7 for c in have)
+
+    return sum(1 for w in said if kept(w)) / len(said), len(said)
+
+
+def _negation_kinds(words: list[str]) -> set[str]:
+    """"not" for no / not / cannot / any n't ("no Friday" -> "not Friday"), plus never, nothing ..."""
+    return {"not" if w in {"no", "not", "cannot"} or w.endswith("n't") else w for w in words
+            if w in NEGATIONS or w in {"not", "cannot"} or w.endswith("n't")}
+
+
+def _sounds_heard(name: str, heard_w: list[str]) -> bool:
+    """The name's letters match one to three heard words in a row ("medi cure" -> Medicare,
+    "thanks given" -> Thanksgiving), not a different name (Ann -> Dan: 0.67)."""
+    from difflib import SequenceMatcher
+
+    target = re.sub(r"[^a-z]", "", name)
+    spans = (re.sub(r"[^a-z]", "", "".join(heard_w[i:i + k])) for k in (1, 2, 3) for i in range(len(heard_w)))
+    return any(SequenceMatcher(a=target, b=s).ratio() >= SOUND_ALIKE for s in spans if s)
+
+
+def _stutter(name: str) -> bool:
+    """A cut-off start, not a name: "T-", "Mi-", "bi-bipap", "i'-i'm"."""
+    return len(name) <= 2 or "-" in name or name.endswith("'")
+
+
+def check_cleanup(original: str, clean: str, words: list[str] = ()) -> str | None:
+    """Why the trained model's text must not be used, or None if it's safe to show. `words` is the user's word
+    list: a name or term on it isn't invented, and may replace a name the recognizer got wrong."""
+    if not clean or not clean.strip():
+        return "empty"
+    orig_w, clean_w = normalize_words(original), normalize_words(clean)
+    base = normalize_words(light_clean(original)) or orig_w
+    if not base or not clean_w:
+        return "empty" if base else "nothing to clean"
+    ratio = len(clean_w) / len(base)
+    if ratio < CLEANUP_MIN_LENGTH_RATIO:
+        return f"too short ({ratio:.2f}x)"
+    if ratio > CLEANUP_MAX_LENGTH_RATIO and len(clean_w) - len(base) > 6:
+        return f"too long ({ratio:.2f}x)"
+    changed_mind = bool(CHANGE_OF_MIND.search(original))
+    kept, n_said = _content_kept(original, clean_w)
+    # A sentence dropped, or a different one written. Short sentences only when almost nothing said is left:
+    # a misheard term can be half of four words ("wheelchair excess a bull" -> "wheelchair accessible").
+    floor = (CLEANUP_MIN_KEPT_CHANGED if changed_mind else CLEANUP_MIN_KEPT) if n_said >= 5 else 0.3 if n_said >= 3 else 0
+    if kept < floor:
+        return f"content dropped (kept {kept:.0%})"
+    listed = {w for x in words for w in normalize_words(x)}
+    heard = set(orig_w) | {re.sub(r"'s$", "", w) for w in orig_w} | listed
+    orig_n, clean_n = {w for w in orig_w if w in NUMBER_WORDS}, {w for w in clean_w if w in NUMBER_WORDS}
+    if clean_n - heard:
+        return "number added: " + " ".join(sorted(clean_n - heard))
+    if orig_n - clean_n and not changed_mind:
+        return "number missing: " + " ".join(sorted(orig_n - clean_n))
+    orig_neg, clean_neg = _negation_kinds(orig_w), _negation_kinds(clean_w)
+    if clean_neg - orig_neg:
+        return "negation added: " + " ".join(sorted(clean_neg - orig_neg))
+    if orig_neg - clean_neg and not changed_mind:
+        return "negation missing: " + " ".join(sorted(orig_neg - clean_neg))
+    invented = sorted(n for n in _names(clean) - TITLES if n not in heard and not _sounds_heard(n, orig_w))
+    if invented:
+        return "name added: " + " ".join(invented)
+    clean_set = {re.sub(r"'s$", "", w) for w in clean_w}
+    lost = sorted(n for n in _names(original) if n not in clean_set and not _stutter(n))
+    from_list = bool(listed & (clean_set - set(orig_w)))      # a word-list name took the place of a misheard one
+    if lost and not changed_mind and not from_list:
+        return "name missing: " + " ".join(lost)
+    return None
+
+
 REFINE_SYSTEM_PROMPT = (
     "You turn dictated speech into the text the speaker meant to write, like a careful editor. The speaker "
     "may have a speech difference, so the speech recognizer often writes a wrong word. Words written as "
@@ -390,28 +495,44 @@ class RewriteOutcome:
 
 
 class Rewriter:
-    """A small local model rewrites dictated text; check_rewrite decides if the result is used.
+    """A local model rewrites dictated text; a guard decides if the result is used.
 
-    Tests pass `model` and `tokenizer` (fakes) to skip loading. Never raises from rewrite():
-    if anything fails, the user's own words come back unchanged (fail open).
+    Two backends (settings.rewrite_backend): "transformers", the original small model (rewrite_model) held to
+    check_rewrite / check_refine; "llamacpp", our trained clean-up model in llama-server (cleanup_model.py,
+    rewrite_gguf) held to check_cleanup. Tests pass `model` and `tokenizer`, or `cleanup`, (fakes) to skip
+    loading. Never raises from rewrite(): if anything fails, the user's own words come back (fail open).
     """
 
-    def __init__(self, settings=None, model=None, tokenizer=None, clock=None, log=print) -> None:
+    def __init__(self, settings=None, model=None, tokenizer=None, clock=None, log=print, cleanup=None) -> None:
         import time
 
         if settings is None:
             from engine.config import settings
         self.settings = settings
+        self.backend = getattr(settings, "rewrite_backend", "transformers")
         self.model_id = getattr(settings, "rewrite_model", "Qwen/Qwen2.5-1.5B-Instruct")
+        if self.backend == "llamacpp":
+            self.model_id = str(getattr(settings, "rewrite_gguf", "trained clean-up model"))
         self.device = getattr(settings, "rewrite_device", "cuda")
         self.max_s = float(getattr(settings, "rewrite_max_s", 3.0))
         self.refine_max_s = float(getattr(settings, "refine_max_s", 15.0))
+        self.words = [w.strip() for w in str(getattr(settings, "rewrite_words", "")).split(",") if w.strip()]
         self._model, self._tokenizer = model, tokenizer
+        self._cleanup = cleanup                                  # cleanup_model.CleanupModel (llamacpp)
+        self.last_answer = None                                  # its last parsed answer: text, alternatives, uncertain
         self._clock = clock or time.monotonic
         self._log = log
         self._last_error = float("-inf")
 
     def load(self) -> None:
+        if self.backend == "llamacpp":
+            with hf.LOAD_LOCK:                                   # one model loads at a time (engine/core/hf.py)
+                if self._cleanup is None:
+                    from engine.voice.cleanup_model import CleanupModel
+
+                    self._cleanup = CleanupModel.from_settings(self.settings, log=self._log)
+                self._cleanup.start()
+            return
         if self._model is not None and self._tokenizer is not None:
             return
         with hf.LOAD_LOCK:                                       # one model loads at a time (engine/core/hf.py)
@@ -446,6 +567,8 @@ class Rewriter:
     def _generate(self, text: str, system: str = SYSTEM_PROMPT, examples=None, max_s: float | None = None,
                   refine: bool = False) -> tuple[str, bool]:
         """(the model's new text, cut_off). cut_off: it stopped on the token or time cap, not on its own."""
+        if self.backend == "llamacpp":
+            return self._generate_cleanup(text, self.max_s if max_s is None else max_s)
         import torch
 
         self.load()
@@ -471,6 +594,22 @@ class Rewriter:
         cut_off = not any(t in eos_ids for t in new)
         return tok.decode(new, skip_special_tokens=True), cut_off
 
+    def _generate_cleanup(self, text: str, max_s: float) -> tuple[str, bool]:
+        """The trained model (llamacpp): its answer's text. It never saw the (?)word(?) marks, so they go."""
+        self.load()
+        self.last_answer = None
+        answer, cut_off = self._cleanup.clean(_UNSURE.sub(lambda m: m.group(1), text), max_s=max_s)
+        if answer is None:
+            raise ValueError("the clean-up model's answer isn't valid JSON")
+        self.last_answer = answer
+        return answer.text, cut_off
+
+    def _check(self, original: str, clean: str, unsure: set[str] | None = None, refine: bool = False) -> str | None:
+        """The guard for this backend: check_cleanup for the trained model, else check_rewrite / check_refine."""
+        if self.backend == "llamacpp":
+            return check_cleanup(original, clean, self.words)
+        return check_refine(original, clean, unsure) if refine else check_rewrite(original, clean)
+
     def rewrite_full(self, text: str) -> RewriteOutcome:
         import time
 
@@ -487,7 +626,7 @@ class Rewriter:
             return self._fallback(text, f"error: {exc}", round((time.perf_counter() - t0) * 1000, 1))
         ms = round((time.perf_counter() - t0) * 1000, 1)
         clean = tidy(output, text)
-        reason = "cut off (token or time cap)" if cut_off else check_rewrite(text, clean)
+        reason = "cut off (token or time cap)" if cut_off else self._check(text, clean)
         if reason is None:
             return RewriteOutcome(text, clean, True, ms, None, output)
         return self._fallback(text, reason, ms, output)
@@ -527,7 +666,7 @@ class Rewriter:
             return RewriteOutcome(text, text, False, round((time.perf_counter() - t0) * 1000, 1), f"error: {exc}")
         ms = round((time.perf_counter() - t0) * 1000, 1)
         refined = tidy(output, text)
-        reason = "cut off (token or time cap)" if cut_off else check_refine(text, refined, unsure_words(marked))
+        reason = "cut off (token or time cap)" if cut_off else self._check(text, refined, unsure_words(marked), refine=True)
         if reason is None:
             return RewriteOutcome(text, refined, True, ms, None, output)
         return RewriteOutcome(text, text, False, ms, reason, output)
@@ -535,6 +674,11 @@ class Rewriter:
     def refine(self, marked: str) -> tuple[str, bool, float]:
         r = self.refine_full(marked)
         return r.clean, r.used, r.ms
+
+    def close(self) -> None:
+        """Stop llama-server (llamacpp). The transformers model needs nothing."""
+        if self._cleanup is not None:
+            self._cleanup.stop()
 
 
 # ------------------------------------------------------------------ the worker
@@ -580,6 +724,9 @@ class RewriteWorker:
             self._cv.notify()
         if self._thread is not None:
             self._thread.join(timeout)
+        close = getattr(self.rewriter, "close", None)           # llamacpp: stop the server with the engine
+        if close is not None:
+            close()
 
     def _run(self, warm_up: bool) -> None:
         if warm_up:
