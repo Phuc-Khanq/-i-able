@@ -107,6 +107,11 @@ Verdict: no-go for building on this prompt as it stands. Dev said 88% and the ho
 The holdout is now spent: tuning against what it showed and running it again would not be a fair test. Any next candidate needs fresh held-out cases.
 Evidence: `eval/dictation_cleanup/reviews/2026-11-02_holdout_score.md`, run folders `runs/2026-11-02_Qwen3.5-4B_cleanup_v4_full_2` and `runs/2026-11-02_Qwen2.5-3B-Instruct_app_2`. Decided by: the agreed bar; Khang to choose what comes next.
 
+**2026-11-02. Train our own clean-up adapter on Qwen3.5-4B; Claude writes the training sentences.**
+Prompting has hit its limit (dev 88%, holdout 67%), so the next step is a LoRA adapter on Qwen3.5-4B (Apache 2.0), trained on our own examples: everyday dictation with real speech habits (stutters, fillers, restarts, changes of mind, misheard words). Start with a pilot of about 200 examples to prove training works on the 5080, then scale up. Claude writes the clean base sentences and the hard cases; a script adds the speech noise. No test-set case or word pair may appear in the training data (a leak check enforces it), and a fresh hidden test set, written by Khang or Hung, replaces the spent holdout.
+Terms checked on 2026-11-02: Anthropic's Consumer Terms (effective Oct 8, 2025, section 3) forbid using the Services "to develop any products or services that compete with our Services, including to develop or train any artificial intelligence or machine learning algorithms or models"; the Commercial Terms (June 17, 2025, D.4) say the same for "competing AI models"; both give the user ownership of outputs. Training is only forbidden for competing products. Khang's reading: an accessibility dictation clean-up does not compete with Claude. Not legal advice; added to the open questions for a lawyer. The alternative, if a lawyer disagrees: regenerate the base sentences with the local Qwen3.5 (Apache 2.0) and retrain.
+Decided by: Khang.
+
 ---
 
 ## Proposed, not yet agreed

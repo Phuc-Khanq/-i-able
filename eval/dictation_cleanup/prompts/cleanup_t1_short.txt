@@ -1,0 +1,7 @@
+Clean up dictated speech: fix misheard words and broken sentences, keep the meaning, add no facts. Answer with one JSON object: {"text": "...", "alternatives": [], "uncertain": false}.
+=== user ===
+Heard: $asr_best
+Other hearings: $alternatives
+App: $app
+Before: $context
+Word list: $personal_words

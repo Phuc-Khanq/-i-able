@@ -124,18 +124,23 @@ class TransformersBackend:
     NOT_APPLIED = {"presence_penalty": 1.5}
 
     def __init__(self, model: str, device: str = "cuda", seed: int = 1234, max_new_tokens: int = 256,
-                 sampling: dict | None = None) -> None:
+                 sampling: dict | None = None, adapter: str | None = None) -> None:
         self.model_id, self.device, self.seed, self.max_new_tokens = model, device, seed, max_new_tokens
+        self.adapter = adapter                              # a LoRA folder (checkpoints/cleanup/<run>/adapter)
         self.sampling = dict(self.QWEN35_SAMPLING if sampling is None else sampling)
         self._tok = self._model = self._template = self._revision = None
 
     @property
     def model_label(self) -> str:
+        if self.adapter:                                    # Qwen3.5-4B + adapter "pilot" -> "Qwen3.5-4B+pilot"
+            from pathlib import Path
+
+            return f"{self.model_id}+{Path(self.adapter).parent.name}"
         return self.model_id
 
     def settings(self) -> dict:
         return {"backend": self.name, "model": self.model_id,
-                "revision": self._revision,
+                "revision": self._revision, "adapter": self.adapter,
                 "device": self.device, "dtype": "bfloat16", "seed": self.seed, "seed_rule": "set before every case",
                 "max_new_tokens": self.max_new_tokens, "sampling": self.sampling, "enable_thinking": False,
                 "card_settings_not_applied": self.NOT_APPLIED,
@@ -161,6 +166,10 @@ class TransformersBackend:
             from transformers import AutoProcessor
 
             template = AutoProcessor.from_pretrained(self.model_id)
+        if self.adapter:
+            from peft import PeftModel
+
+            model = PeftModel.from_pretrained(model, self.adapter)
         model.to(self.device)
         model.eval()
         self._tok, self._model, self._template = tok, model, template

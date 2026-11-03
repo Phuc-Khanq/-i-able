@@ -3,6 +3,7 @@
     python -m eval.dictation_cleanup.run --backend current                      # today's clean-up, the baseline
     python -m eval.dictation_cleanup.run --backend transformers --model Qwen/Qwen3.5-4B --prompt v1_plain
     python -m eval.dictation_cleanup.run --backend transformers --model Qwen/Qwen3.5-4B --prompt v1_full
+    python -m eval.dictation_cleanup.run --backend transformers --model Qwen/Qwen3.5-4B --prompt t1_short         --adapter checkpoints/cleanup/pilot/adapter                             # our trained adapter
     python -m eval.dictation_cleanup.run --backend fake --limit 5               # no GPU: checks the runner
 
 Writes eval/dictation_cleanup/runs/<date>_<model>_<prompt>/ (git-ignored): results.jsonl (one line per case,
@@ -122,7 +123,7 @@ def make_backend(args):
         if not args.model:
             raise SystemExit("--model is required for the transformers backend")
         return backends.TransformersBackend(args.model, device=args.device or "cuda", seed=args.seed,
-                                            max_new_tokens=args.max_new_tokens)
+                                            max_new_tokens=args.max_new_tokens, adapter=args.adapter)
     return backends.FakeBackend()
 
 
@@ -132,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rescore", type=Path, nargs="+", metavar="RUN_FOLDER",
                    help="re-run the automatic checks on finished runs (no model needed)")
     p.add_argument("--model", help="model name (transformers), or an override of rewrite_model (current)")
+    p.add_argument("--adapter", help="a trained LoRA folder (transformers), e.g. checkpoints/cleanup/pilot/adapter")
     p.add_argument("--prompt", default="v1_plain", help="prompt version in prompts/ (not used by current)")
     p.add_argument("--split", choices=list(scoring.SPLITS), default="dev")
     p.add_argument("--device", help="cuda (default) or cpu")
