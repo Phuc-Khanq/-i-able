@@ -112,6 +112,16 @@ Prompting has hit its limit (dev 88%, holdout 67%), so the next step is a LoRA a
 Terms checked on 2026-11-02: Anthropic's Consumer Terms (effective Oct 8, 2025, section 3) forbid using the Services "to develop any products or services that compete with our Services, including to develop or train any artificial intelligence or machine learning algorithms or models"; the Commercial Terms (June 17, 2025, D.4) say the same for "competing AI models"; both give the user ownership of outputs. Training is only forbidden for competing products. Khang's reading: an accessibility dictation clean-up does not compete with Claude. Not legal advice; added to the open questions for a lawyer. The alternative, if a lawyer disagrees: regenerate the base sentences with the local Qwen3.5 (Apache 2.0) and retrain.
 Decided by: Khang.
 
+**2026-11-03. First trained clean-up adapter ("full1"): best dev result so far; it is the new candidate.**
+LoRA on Qwen3.5-4B (r=16, alpha=32, all linear layers except in_proj_a/b, lr 2e-4, 3 epochs, batch 8, bf16, peft 0.21.2 already in requirements-train.txt). Data: 1,088 examples written by Claude (seeds.py, seeds_extra.py, templates.py) with noise.py adding stutters, fillers, restarts, dropped small words and misspellings; the leak check dropped 37. Measured on the 5080 with the engine off:
+- Training time: 32.7 min for 387 steps (5.2 s per step), peak GPU 9.5 GB. The pilot (300 examples) took 9.4 min.
+- Dev, automatic checks: full1 64/67, over-edit 0/10, silent guess 1/10, 0 invented, 0 broken JSON. Epoch 2 also 64/67; epoch 3 kept because it fixed X08. Pilot 64/67, silent 0/10. The untrained model with the same short prompt: 60/67, silent 4/10, over-edit 1/10.
+- Dev, human review (Claude with Khang's rule; outputs seen before keep their earlier answers): full1 full pass 62/67 (93%), meaning 65/67, nothing invented 67/67. Pilot 59/67; prompt v4 59/67; today's app 17/67.
+- Speed, adapter merged into the weights: p50/p90/p99 1770/2070/2237 ms (the pilot unmerged: 2662/3041/3700). Still the slow reference kernels; not yet under the 1.5 s quick clean-up budget.
+Choices made: training uses the short prompt `prompts/cleanup_t1_short.txt` (about 125 tokens per example, against about 1,185 with v4_full: the smoke test with v4_full needed about 250 s per step and filled the 16 GB card); the eval merges the adapter (merge_and_unload) as the app would ship it; the leak check no longer blocks negation and number words (they are categories the model must learn), but still blocks test sentences and the test set's own misheard word pairs.
+Honest limits: the dev cases are no longer a fair test. The training data was written after seeing dev's failures, and the epoch was picked on dev. Only a fresh hidden test set gives a number to trust. The adapter (about 120 MB, `checkpoints/cleanup/full1/adapter`) and the data (`data/cleanup_train/`) are git-ignored; the code to rebuild both is committed. Built on Claude-written data: see the 2026-11-02 terms entry.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-03_dev_full1_score.md`, `..._dev_pilot_score.md`, run folders `runs/2026-11-03_Qwen3.5-4B-full1*` and `runs/2026-11-03_Qwen3.5-4B_cleanup_t1_short`. Decided by: Claude, inside the training run Khang approved; Khang to confirm.
+
 ---
 
 ## Proposed, not yet agreed

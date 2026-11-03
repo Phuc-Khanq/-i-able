@@ -71,3 +71,18 @@ Each step is its own pull request, tested with `scripts\run_demo.ps1` on the ref
 3. Where do alternatives come from (section 4.4)? This decides how much of the gain the app keeps.
 4. ~~The pass bar in section 3~~: agreed 2026-11-02.
 5. Test case M25 (the product name) after the rename.
+
+## 6. Training our own adapter (from 2026-11-03)
+
+Prompting stopped at v4 (dev 88%, holdout 67%). Training: `engine/voice/cleanup_train/` (build.py builds the data, train.py trains a LoRA, the eval runner loads it with `--adapter`).
+
+| Dev, 67 cases | Today's app | 4B, prompt v4 | 4B, short prompt, untrained | Pilot (300 examples) | **full1 (1,088 examples)** |
+| --- | --- | --- | --- | --- | --- |
+| Automatic pass | 46/67 | 63/67 | 60/67 | 64/67 | **64/67** |
+| Silent guess (ambiguous) | 8/10 | 2/10 | 4/10 | 0/10 | 1/10 |
+| Over-edit (clean controls) | 0/10 | 0/10 | 1/10 | 0/10 | 0/10 |
+| Human full pass (Khang's rule) | 17/67 | 59/67 | not reviewed | 59/67 | **62/67 (93%)** |
+| Latency p50 / p90 (ms) | 435 / 573 | 2036 / 2449 | 1754 / 2050 | 2662 / 3041 (unmerged) | 1770 / 2070 (merged) |
+
+Dev is now tuned on: the data was written after seeing its failures. Next: a fresh hidden set of about 35 cases written by Khang or Hung, run once with full1; more real-sounding data where full1 still fails (curt orders, names on the word list); speed (llama.cpp or the fast kernels) for the 1.5 s budget.
+
