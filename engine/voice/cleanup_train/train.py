@@ -10,8 +10,9 @@ off) followed by the answer and the end-of-turn token. Only the answer is learne
 masked out of the loss. Plain PyTorch loop with peft (already in requirements-train.txt), micro-batch 1 (no
 padding), gradient accumulation, gradient checkpointing, bf16.
 
-Writes checkpoints/cleanup/<name>/: adapter/ (the LoRA weights, a few tens of MB), config.json, log.jsonl and
-results.json (loss before and after on held-back examples, time, peak GPU memory). checkpoints/ is git-ignored.
+Writes checkpoints/cleanup/<name>/: adapter/ (the LoRA weights after the last step, about 120 MB at r=16), epoch1/,
+epoch2/ ... (the same after each earlier epoch), config.json, log.jsonl and results.json (loss before, after and
+per epoch on held-back examples, time, peak GPU memory). checkpoints/ is git-ignored.
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ class TrainConfig:
     warmup_steps: int = 10
     held_back: float = 0.05       # share of the examples kept out of training, for a loss check
     max_steps: int = 0            # 0 = run all epochs
+    save_epochs: bool = True      # also save the adapter after each epoch (epoch1/, epoch2/ ...)
     seed: int = 1234
 
 
@@ -121,7 +123,7 @@ def train(cfg: TrainConfig, log=print) -> dict:
     before = val_loss()
     log(f"held-back loss before training: {before}")
 
-    t0, order = time.perf_counter(), []
+    t0, order, per_epoch = time.perf_counter(), [], {}
     model.train()
     with (out / "log.jsonl").open("w", encoding="utf-8") as f:
         for step in range(1, total + 1):
@@ -143,11 +145,16 @@ def train(cfg: TrainConfig, log=print) -> dict:
             f.flush()
             if step == 1 or step % 10 == 0 or step == total:
                 log(f"step {step}/{total} loss {running:.3f} ({row['s']:.0f} s)")
+            if cfg.save_epochs and step % steps_per_epoch == 0 and step < total:
+                epoch = step // steps_per_epoch            # a copy per epoch, so dev can pick the best one
+                model.save_pretrained(out / f"epoch{epoch}")
+                per_epoch[f"epoch{epoch}"] = val_loss()
+                log(f"saved epoch{epoch}, held-back loss {per_epoch[f'epoch{epoch}']}")
 
     after = val_loss()
     model.save_pretrained(out / "adapter")
     results = {"examples": len(data), "held_back": len(val), "steps": total, "loss_before": before,
-               "loss_after": after, "minutes": round((time.perf_counter() - t0) / 60, 1),
+               "loss_after": after, "loss_per_epoch": per_epoch, "minutes": round((time.perf_counter() - t0) / 60, 1),
                "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2), "adapter": str(out / "adapter")}
     (out / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     log(f"held-back loss after training: {after}")

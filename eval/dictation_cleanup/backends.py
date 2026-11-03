@@ -132,15 +132,17 @@ class TransformersBackend:
 
     @property
     def model_label(self) -> str:
-        if self.adapter:                                    # Qwen3.5-4B + adapter "pilot" -> "Qwen3.5-4B+pilot"
+        if self.adapter:            # .../pilot/adapter -> "Qwen3.5-4B+pilot"; .../full1/epoch1 -> "...+full1-epoch1"
             from pathlib import Path
 
-            return f"{self.model_id}+{Path(self.adapter).parent.name}"
+            folder = Path(self.adapter)
+            run = folder.parent.name + ("" if folder.name == "adapter" else f"-{folder.name}")
+            return f"{self.model_id}+{run}"
         return self.model_id
 
     def settings(self) -> dict:
         return {"backend": self.name, "model": self.model_id,
-                "revision": self._revision, "adapter": self.adapter,
+                "revision": self._revision, "adapter": self.adapter, "adapter_merged": bool(self.adapter),
                 "device": self.device, "dtype": "bfloat16", "seed": self.seed, "seed_rule": "set before every case",
                 "max_new_tokens": self.max_new_tokens, "sampling": self.sampling, "enable_thinking": False,
                 "card_settings_not_applied": self.NOT_APPLIED,
@@ -169,7 +171,8 @@ class TransformersBackend:
         if self.adapter:
             from peft import PeftModel
 
-            model = PeftModel.from_pretrained(model, self.adapter)
+            # Merged into the weights, as the app would ship it: same answers, no adapter cost per token.
+            model = PeftModel.from_pretrained(model, self.adapter).merge_and_unload()
         model.to(self.device)
         model.eval()
         self._tok, self._model, self._template = tok, model, template

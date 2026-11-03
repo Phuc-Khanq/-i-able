@@ -99,6 +99,40 @@ class BuildTest(unittest.TestCase):
             self.assertIsInstance(row[4], list)
 
 
+class FullBuildTest(unittest.TestCase):
+    def test_templates_make_distinct_valid_cases(self):
+        from engine.voice.cleanup_train import templates
+
+        rng = random.Random(1)
+        fixes = templates.corrections(rng, 40)
+        self.assertEqual(len({f[2] for f in fixes}), 40)
+        for _, _, heard, meant in fixes:
+            self.assertLess(len(meant), len(heard))            # the correction is shorter than what was said
+        for _, _, heard, other, _ in templates.negation_pairs(rng, 30) + templates.number_pairs(rng, 12):
+            self.assertNotEqual(heard, other)
+            self.assertNotIn("I did go to work tomorrow", heard)
+
+    def test_full_build_has_more_and_keeps_the_rules(self):
+        leak = build.LeakCheck()
+        pilot, _ = build.examples(random.Random(7), leak)
+        full, _ = build.examples(random.Random(7), leak, extra=True, generated=build.FULL_GENERATED)
+        self.assertGreater(len(full), 3 * len(pilot))
+        kinds = {c["kind"] for c in full}
+        self.assertIn("context_keep", kinds)
+        for c in full:
+            t = c["target"]
+            if not t["uncertain"]:
+                self.assertEqual(t["alternatives"], [], c)
+            self.assertFalse(leak.too_close(c["asr_best"], t["text"]), c["asr_best"])
+        lines = [(c["asr_best"], c["asr_alt1"], c["context"]) for c in full]
+        self.assertEqual(len(lines), len(set(lines)))           # no line twice
+
+    def test_negation_words_are_not_blocked_but_test_pairs_are(self):
+        leak = build.LeakCheck()
+        self.assertFalse(any(w.endswith("n't") for w in leak.swap_words))
+        self.assertNotIn("not", leak.swap_words)
+        self.assertIn("pitcher", leak.swap_words)
+
 class AdapterLabelTest(unittest.TestCase):
     def test_label_names_the_adapter_run(self):
         from eval.dictation_cleanup.backends import TransformersBackend
@@ -107,6 +141,8 @@ class AdapterLabelTest(unittest.TestCase):
         self.assertEqual(b.model_label, "Qwen/Qwen3.5-4B+pilot")
         self.assertEqual(b.settings()["adapter"], "checkpoints/cleanup/pilot/adapter")
         self.assertEqual(TransformersBackend("Qwen/Qwen3.5-4B").model_label, "Qwen/Qwen3.5-4B")
+        self.assertEqual(TransformersBackend("Qwen/Qwen3.5-4B", adapter="checkpoints/cleanup/full1/epoch2").model_label,
+                         "Qwen/Qwen3.5-4B+full1-epoch2")
 
     def test_short_prompt_loads(self):
         from eval.dictation_cleanup.prompt_files import load_prompt

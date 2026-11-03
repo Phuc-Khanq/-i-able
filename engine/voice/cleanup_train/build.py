@@ -2,6 +2,7 @@
 
     .\\.venv\\Scripts\\python.exe -m engine.voice.cleanup_train.build                 # pilot, about 250 examples
     .\\.venv\\Scripts\\python.exe -m engine.voice.cleanup_train.build --variants 3    # more noisy copies per sentence
+    .\\.venv\\Scripts\\python.exe -m engine.voice.cleanup_train.build --name full1 --full  # every seed and template
 
 Writes data/cleanup_train/<name>.jsonl (git-ignored; one chat per line: the eval prompt's system and user
 messages, and the answer as the model should give it) and <name>_preview.csv to read the examples in Excel.
@@ -46,16 +47,21 @@ class LeakCheck:
         self.sentences = [_tokens(t) for r in rows for t in (r["asr_best"], r["intended"].split("||")[0])]
         swap: set[str] = set()
         for r in rows:
-            heard = _tokens(" ".join([r["asr_best"], r["asr_alt1"], r["asr_alt2"]]))
-            meant = _tokens(r["intended"])
-            swap |= heard ^ meant
-        self.swap_words = {w for w in swap if w not in noise.FUNCTION_WORDS and len(w) > 2}
+            heard = _tokens(r["asr_best"])
+            for other in [r["asr_alt1"], r["asr_alt2"], *r["intended"].split("||")]:
+                if other.strip():                   # every word that differs between two readings of a case
+                    swap |= heard ^ _tokens(other)
+        # Negations and numbers are whole categories the model must learn (can/can't, thirteen/thirty), not a
+        # word pair to keep out; too_close() still keeps the test sentences themselves out.
+        generic = noise.FUNCTION_WORDS | noise.NUMBER_WORDS | noise.NEGATIONS
+        self.swap_words = {w for w in swap if w not in generic and len(w) > 2 and not w.endswith("n't")}
 
     def too_close(self, *texts: str) -> bool:
         return any(_overlap(_tokens(t), s) >= SIMILAR for t in texts if t for s in self.sentences)
 
-    def uses_test_pair(self, heard: str, meant: str) -> bool:
-        return bool((_tokens(heard) ^ _tokens(meant)) & self.swap_words)
+    def uses_test_pair(self, a: str, b: str) -> bool:
+        """Whether the words that differ between two readings include a word a test case mixes up."""
+        return bool((_tokens(a) ^ _tokens(b)) & self.swap_words)
 
 
 def answer(text: str, alternatives: list[str] | None = None, uncertain: bool = False) -> dict:
@@ -68,10 +74,32 @@ def case(kind: str, app: str, before: str, heard: str, target: dict, other: str 
             "personal_words": "|".join(words or []), "target": target}
 
 
-def examples(rng: random.Random, leak: LeakCheck, variants: int = 2) -> tuple[list[dict], list[str]]:
-    """Every training example, and a note for each one the leak check dropped."""
+def examples(rng: random.Random, leak: LeakCheck, variants: int = 2, extra: bool = False,
+             generated: dict | None = None) -> tuple[list[dict], list[str]]:
+    """Every training example, and a note for each one the leak check dropped.
+
+    extra=True adds seeds_extra.py; generated={"corrections": n, "negations": n, "numbers": n} adds that many
+    template cases (templates.py). The pilot used neither.
+    """
+    mods = [seeds]
+    if extra:
+        from engine.voice.cleanup_train import seeds_extra
+
+        mods.append(seeds_extra)
+
+    def rows(name: str) -> list:
+        return [row for m in mods for row in getattr(m, name, [])]
+
+    self_correct, ambiguous = rows("SELF_CORRECT"), rows("AMBIGUOUS")
+    if generated:
+        from engine.voice.cleanup_train import templates
+
+        self_correct += templates.corrections(rng, generated.get("corrections", 0))
+        ambiguous += templates.negation_pairs(rng, generated.get("negations", 0))
+        ambiguous += templates.number_pairs(rng, generated.get("numbers", 0))
+
     out: list[dict] = []
-    for app, before, text in seeds.PLAIN:
+    for app, before, text in rows("PLAIN"):
         if rng.random() < 0.25:                     # some come as they are: "already fine, keep it"
             out.append(case("clean", app, before, text, answer(text)))
         for v in range(variants):
@@ -79,40 +107,58 @@ def examples(rng: random.Random, leak: LeakCheck, variants: int = 2) -> tuple[li
             heard, misspelled = noise.messy(text, rng, leak.swap_words, broken=broken)
             other = re.sub(r"[.?!]+$", "", text) if misspelled and rng.random() < 0.4 else ""
             out.append(case("broken" if broken else "messy", app, before, heard, answer(text), other))
-    for app, before, text in seeds.CASUAL:
+    for app, before, text in rows("CASUAL"):
         out.append(case("clean", app, before, text, answer(text)))
-    for app, before, heard, meant in seeds.SENTENCE_FIX:
+    for app, before, heard, meant in rows("SENTENCE_FIX"):
         out.append(case("sentence_fix", app, before, heard, answer(meant)))
-    for app, before, heard, other, meant in seeds.CONTEXT_FIX:
+    for app, before, heard, other, meant in rows("CONTEXT_FIX"):
         out.append(case("context_fix", app, before, heard, answer(meant), other))
-    for app, before, heard, other, words, meant in seeds.NAME_FIX:
+    for app, before, heard, other, meant in rows("CONTEXT_KEEP"):
+        out.append(case("context_keep", app, before, heard, answer(meant), other))
+    for app, before, heard, other, words, meant in rows("NAME_FIX"):
         out.append(case("name_fix", app, before, heard, answer(meant), other, words))
-    for app, before, heard, meant in seeds.SELF_CORRECT:
+    for app, before, heard, meant in self_correct:
         out.append(case("self_correct", app, before, heard, answer(meant)))
-    for app, before, heard, meant in seeds.BROKEN:
+    for app, before, heard, meant in rows("BROKEN"):
         out.append(case("broken", app, before, heard, answer(meant)))
         messy_heard, _ = noise.messy(heard, rng, leak.swap_words)
         out.append(case("broken", app, before, messy_heard, answer(meant)))
-    for app, before, heard, other, words in seeds.AMBIGUOUS:
+    for app, before, heard, other, words in ambiguous:
         out.append(case("ambiguous", app, before, heard, answer(_sentence(heard), [_sentence(other)], True), other, words))
-    for app, before, heard, text, readings in seeds.CONTEXT_AMBIGUOUS:
-        out.append(case("context_ambiguous", app, before, heard, answer(text, readings, True)))
-    for app, before, heard in seeds.CUT_OFF:
+    for app, before, heard, text, readings in rows("CONTEXT_AMBIGUOUS"):
+        if readings:
+            out.append(case("context_ambiguous", app, before, heard, answer(text, readings, True)))
+        else:                                       # nothing to choose between: clear words, keep as said
+            out.append(case("context_keep", app, before, heard, answer(text)))
+    for app, before, heard in rows("CUT_OFF"):
         out.append(case("cut_off", app, before, heard, answer(heard, [], True)))
-    for app, before, heard, meant in seeds.NOT_FOR_YOU:
+    for app, before, heard, meant in rows("NOT_FOR_YOU"):
         out.append(case("not_for_you", app, before, heard, answer(meant)))
 
-    kept, dropped = [], []
+    kept, dropped, seen = [], [], set()
     for c in out:
         meant = c["target"]["text"]
+        key = (c["asr_best"], c["asr_alt1"], c["context"])
+        if key in seen:
+            continue                                # the same line twice (seeds and templates can overlap)
+        seen.add(key)
         if leak.too_close(c["asr_best"], meant):
             dropped.append(f"{c['kind']}: too close to a test case: {c['asr_best']!r}")
-        elif c["kind"] in ("sentence_fix", "context_fix", "name_fix", "ambiguous") and \
-                leak.uses_test_pair(c["asr_best"] + " " + c["asr_alt1"], meant + " " + " ".join(c["target"]["alternatives"])):
+        elif _mixes_test_words(c, leak):
             dropped.append(f"{c['kind']}: uses a word a test case mishears: {c['asr_best']!r}")
         else:
             kept.append(c)
     return kept, dropped
+
+
+def _mixes_test_words(c: dict, leak: LeakCheck) -> bool:
+    """A fix or an ambiguous pair that turns on a word the test set mixes up."""
+    meant, heard, other = c["target"]["text"], c["asr_best"], c["asr_alt1"]
+    if c["kind"] in ("sentence_fix", "context_fix", "name_fix"):
+        return leak.uses_test_pair(heard, meant)
+    if c["kind"] in ("ambiguous", "context_keep") and other:
+        return leak.uses_test_pair(heard, other)
+    return False
 
 
 def _sentence(text: str) -> str:
@@ -131,12 +177,16 @@ def to_chat(c: dict, prompt) -> dict:
     return {"kind": c["kind"], "messages": msgs}
 
 
+FULL_GENERATED = {"corrections": 90, "negations": 48, "numbers": 24}
+
+
 def build(name: str = "pilot", variants: int = 2, seed: int = 7, out_dir: Path = OUT,
-          prompt_name: str = PROMPT) -> tuple[Path, dict, list[str]]:
+          prompt_name: str = PROMPT, full: bool = False) -> tuple[Path, dict, list[str]]:
+    """full=False is the pilot (seeds.py only); full=True adds seeds_extra.py and the template cases."""
     from eval.dictation_cleanup.prompt_files import load_prompt
 
     rng = random.Random(seed)
-    kept, dropped = examples(rng, LeakCheck(), variants)
+    kept, dropped = examples(rng, LeakCheck(), variants, extra=full, generated=FULL_GENERATED if full else None)
     rng.shuffle(kept)
     prompt = load_prompt(prompt_name)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -155,7 +205,7 @@ def build(name: str = "pilot", variants: int = 2, seed: int = 7, out_dir: Path =
     for c in kept:
         counts[c["kind"]] = counts.get(c["kind"], 0) + 1
     (out_dir / f"{name}_info.json").write_text(json.dumps(
-        {"prompt": prompt.name, "prompt_sha256": prompt.sha256, "seed": seed, "variants": variants,
+        {"prompt": prompt.name, "prompt_sha256": prompt.sha256, "seed": seed, "variants": variants, "full": full,
          "examples": len(kept), "by_kind": counts, "dropped": dropped}, indent=2), encoding="utf-8")
     return path, counts, dropped
 
@@ -166,8 +216,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--variants", type=int, default=2, help="noisy copies per plain sentence")
     p.add_argument("--seed", type=int, default=7)
     p.add_argument("--prompt", default=PROMPT, help="prompt version in eval/dictation_cleanup/prompts/")
+    p.add_argument("--full", action="store_true", help="add seeds_extra.py and the template cases (not the pilot)")
     args = p.parse_args(argv)
-    path, counts, dropped = build(args.name, args.variants, args.seed, prompt_name=args.prompt)
+    path, counts, dropped = build(args.name, args.variants, args.seed, prompt_name=args.prompt, full=args.full)
     print(f"{sum(counts.values())} examples -> {path}")
     for k, n in sorted(counts.items()):
         print(f"  {k}: {n}")
