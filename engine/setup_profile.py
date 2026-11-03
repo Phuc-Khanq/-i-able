@@ -82,7 +82,8 @@ def write_config(profile: str, path: Path = CONFIG) -> bool:
 
 
 def wanted_models(settings) -> list[tuple[str, str]]:
-    """[(kind, name)] the app will load with these settings: kind "whisper" or "hf"."""
+    """[(kind, name)] the app will load with these settings: kind "whisper" or "hf" (downloaded), or "file" (a local
+    file nothing downloads: the trained clean-up model and llama-server, rewrite_backend "llamacpp")."""
     out = []
     model = str(settings.whisper_model)
     if not (REPO_ROOT / model).is_dir() and not Path(model).is_dir():   # a local folder (a fine-tune) needs nothing
@@ -90,13 +91,25 @@ def wanted_models(settings) -> list[tuple[str, str]]:
     if getattr(settings, "use_ui_venus", True):
         out.append(("hf", str(settings.ui_venus_model)))
     if getattr(settings, "rewrite_dictation", True):
-        out.append(("hf", str(settings.rewrite_model)))
+        if getattr(settings, "rewrite_backend", "transformers") == "llamacpp":
+            out += [("file", str(settings.llama_server_path)), ("file", str(settings.rewrite_gguf))]
+        else:
+            out.append(("hf", str(settings.rewrite_model)))
     return out
 
 
+def local_path(name: str) -> Path:
+    path = Path(name)
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
 def download(settings, log=print) -> None:
-    """Fill the Hugging Face cache now, so the first launch doesn't wait 10 minutes for downloads."""
+    """Fill the Hugging Face cache now, so the first launch doesn't wait 10 minutes for downloads. Local files are
+    only checked: llama-server comes from llama.cpp's release, the model file from cleanup_train/export.py."""
     for kind, name in wanted_models(settings):
+        if kind == "file":
+            log(f"  {name}: {'ready' if local_path(name).exists() else 'MISSING (not downloaded: see docs/plans/2026-11-03_cleanup_app_integration.md)'}")
+            continue
         log(f"Downloading {name} (once; later runs load it from disk) ...")
         if kind == "whisper":
             from faster_whisper.utils import download_model

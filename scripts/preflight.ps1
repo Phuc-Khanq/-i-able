@@ -55,16 +55,28 @@ if ($py) {
     Fail "other Python programs may hold the camera or GPU. Stop them (Stop-Process -Id <id>):"
     $py | ForEach-Object { Write-Host "          $($_.ProcessId)  $($_.CommandLine)" }
 } else { Ok "no other [eye]able Python program is running" }
-$trainer = Get-CimInstance Win32_Process -Filter "name='python.exe'" | Where-Object { $_.CommandLine -match "finetune" }
+$trainer = Get-CimInstance Win32_Process -Filter "name='python.exe'" | Where-Object { $_.CommandLine -match "finetune|cleanup_train" }
 if ($trainer) { Fail "training is running and uses the GPU: wait for it to finish" }
-# What the settings will put on the GPU (MB, measured on the demo PC): Whisper 2500, UI-Venus 6000, clean-up 5000 (3B) / 3500 (1.5B)
+# What the settings will put on the GPU (MB, measured on the demo PC): Whisper 2500, UI-Venus 6000, clean-up 5000 (3B) / 3500 (1.5B);
+# the trained clean-up model in llama.cpp (rewrite_backend "llamacpp") about 5000 with the Q8_0 file, 3300 with Q4_K_M (2026-11-03)
 $cfg = $null
 if (Test-Path "config.local.json") { try { $cfg = Get-Content "config.local.json" -Raw | ConvertFrom-Json } catch { } }
 if (-not $cfg) { $cfg = [pscustomobject]@{} }
 $need = 0
 if (-not $cfg.whisper_device -or $cfg.whisper_device -eq "cuda") { $need += 2500 }
 if ($cfg.use_ui_venus -ne $false) { $need += 6000 }
-if ($cfg.rewrite_dictation -ne $false) { if ("$($cfg.rewrite_model)" -like "*1.5B*") { $need += 3500 } else { $need += 5000 } }
+if ($cfg.rewrite_dictation -ne $false) {
+    if ($cfg.rewrite_backend -eq "llamacpp") {
+        # The trained clean-up model: llama-server and the model file are local files (nothing downloads them)
+        $server = if ($cfg.llama_server_path) { $cfg.llama_server_path } else { "downloads\llama.cpp\b11960\bin\llama-server.exe" }
+        $gguf = if ($cfg.rewrite_gguf) { $cfg.rewrite_gguf } else { "checkpoints\cleanup\full1\gguf\full1-q8_0.gguf" }
+        if (Test-Path $server) { Ok "llama-server found: $server" } else { Fail "llama-server not found: $server (llama.cpp b11960, see docs/DECISIONS.md)" }
+        if (Test-Path $gguf) { Ok "clean-up model file found: $gguf" } else { Fail "clean-up model file not found: $gguf (make it with engine.voice.cleanup_train.export)" }
+        if ("$gguf" -like "*q4_k_m*") { $need += 3300 } else { $need += 5000 }
+    } elseif ("$($cfg.rewrite_model)" -like "*1.5B*") { $need += 3500 } else { $need += 5000 }
+}
+$server_running = Get-Process llama-server -ErrorAction SilentlyContinue
+if ($server_running) { Warn "a llama-server is already running (pid $($server_running.Id -join ', ')): the engine starts its own; stop the old one if it's left over" }
 $smi = $null
 if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
     try { $smi = (nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits) 2>$null } catch { }

@@ -81,6 +81,16 @@ class TestWantedModels(unittest.TestCase):
             got = sp.wanted_models(self.settings(whisper_model=d, use_ui_venus=False, rewrite_dictation=False))
             self.assertEqual(got, [])
 
+    def test_the_trained_clean_up_model_is_two_local_files(self):
+        s = self.settings(use_ui_venus=False, rewrite_backend="llamacpp", llama_server_path="no/llama-server.exe",
+                          rewrite_gguf="no/model.gguf")
+        self.assertEqual(sp.wanted_models(s), [("whisper", "large-v3-turbo"), ("file", "no/llama-server.exe"),
+                                               ("file", "no/model.gguf")])
+        lines = []
+        sp.download(SimpleNamespace(**{**vars(s), "whisper_model": tempfile.gettempdir()}), log=lines.append)
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(all("MISSING" in line for line in lines))        # checked, never downloaded
+
 
 class TestNvidiaSmi(unittest.TestCase):
     def test_reads_the_first_gpu(self):

@@ -72,6 +72,19 @@ model's), and the preview's optional `choice` says which one shows. The proposal
 **5. Shipping.** The installer or first run needs llama-server (the CUDA build is about 770 MB with NVIDIA's DLLs;
 CPU or Vulkan builds for laptops) and the model file (Q8_0 4.5 GB, Q4_K_M 2.7 GB).
 
+## Trying it in the demo (Khang, on the reference machine)
+
+1. Close anything else using the GPU (no training running).
+2. Add one line to `config.local.json` (keep what's there): `"rewrite_backend": "llamacpp"`. Optional: your own
+   words, `"rewrite_words": "Priya, Dr. Okafor, baclofen"`.
+3. `.\scripts\preflight.ps1`: it now checks llama-server, the model file and the GPU memory for this backend.
+4. `.\scripts\run_demo.ps1`, then dictate and look at the card:
+   - a messy sentence ("um can you you send the pitcher to mom") comes back clean within about half a second;
+   - an unsure one shows "Check this" and "option two" lines; say "option two", then "yes";
+   - "use original" still gives your own words; a dictation mentioning a name you typed earlier keeps it;
+   - quit the demo and check Task Manager: no `llama-server.exe` left running.
+5. To go back: remove the line (or set it to "transformers").
+
 ## GPU memory
 
 Q8_0 takes about 5 GB (nvidia-smi, whole card) against 6.3 GB for today's Qwen2.5-3B, so the `full` profile
