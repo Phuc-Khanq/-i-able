@@ -148,6 +148,16 @@ class TestInventedFacts(unittest.TestCase):
         c = case(asr_best="Send it to Sam")
         self.assertEqual(scoring.invented_facts(c, answer("Send it to Sam.", ["Send it to Sandy."])), ["name: sandy"])
 
+    def test_a_title_is_not_a_name(self):
+        c = case(asr_best="Ask Doctor Mehta about the form")
+        self.assertEqual(scoring.invented_facts(c, answer("Ask Dr. Mehta about the form.")), [])
+
+    def test_a_negation_read_into_a_misspelling_is_flagged(self):
+        # measured: "Cansel doctor appoinment" came back as "I can't cancel the doctor appointment"
+        c = case(asr_best="Cansel doctor appoinment tomorow")
+        self.assertEqual(scoring.invented_facts(c, answer("I can't cancel the doctor appointment tomorrow.")),
+                         ["negation: not"])
+
     def test_a_name_from_the_word_list_is_not_invented(self):
         c = case(asr_best="Tell Alix I am coming", personal_words="Alex|Alice")
         self.assertEqual(scoring.invented_facts(c, answer("Tell Alex I am coming.", ["Tell Alice I am coming."])), [])
@@ -300,6 +310,20 @@ class TestRunner(unittest.TestCase):
             with contextlib.redirect_stdout(buf):
                 run.main(["--backend", "fake", "--out", tmp, "--limit", "2"])
             self.assertNotIn("WARNING", buf.getvalue())
+
+    def test_rescore_reruns_the_checks_on_saved_answers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = run.run(backends.FakeBackend(), scoring.load_cases()[:3], load_prompt("v1_plain"), Path(tmp),
+                          model_label="fake", log=lambda *a: None)
+            path = out / "results.jsonl"
+            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            rows[0].update({"auto_pass": False, "problems": ["stale"]})          # as if a check had changed since
+            path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+            run.main(["--rescore", str(out)])
+            again = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            self.assertNotIn("stale", again[0]["problems"])
+            self.assertEqual([r["ms"] for r in again], [r["ms"] for r in rows])  # timings stay
+            self.assertIn("rescored", json.loads((out / "summary.json").read_text(encoding="utf-8"))["meta"])
 
     def test_run_folders_never_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -76,16 +76,41 @@ def run(backend, cases: list[dict], prompt, out_root: Path = RUNS, model_label: 
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
             log(f"[{i}/{len(cases)}] {case['id']} {'pass' if row['auto_pass'] else 'FAIL'} {row['ms']:.0f} ms")
-    summary = scoring.summarize(results)
     meta = {"model": label, "backend": backend.name, "prompt": prompt.name if prompt is not None else "app",
             "prompt_sha256": prompt.sha256 if prompt is not None else None, "split": split,
             "date": time.strftime("%Y-%m-%d %H:%M"), "machine": machine(), "peak_gpu_gb": backend.peak_gpu_gb(),
             "load_s": load_s}
+    (folder / "settings.json").write_text(json.dumps({**backend.settings(), **meta}, indent=2), encoding="utf-8")
+    _write_summary(folder, results, meta)
+    return folder
+
+
+def _write_summary(folder: Path, results: list[dict], meta: dict) -> None:
+    summary = scoring.summarize(results)
     (folder / "summary.json").write_text(json.dumps({**summary, "meta": meta}, indent=2), encoding="utf-8")
     (folder / "summary.md").write_text(scoring.render_summary(summary, results, meta), encoding="utf-8")
-    (folder / "settings.json").write_text(json.dumps({**backend.settings(), **meta}, indent=2), encoding="utf-8")
     scoring.write_review(folder / "review.csv", results)
-    return folder
+
+
+def rescore(folder: Path) -> None:
+    """Re-run the automatic checks on a finished run's saved answers (after a check changed). The model's
+    answers, timings and settings stay as they were; results.jsonl, the summary and review.csv are rewritten."""
+    cases = {c["id"]: c for split in scoring.SPLITS for c in scoring.load_cases(split=split)}
+    with (folder / "results.jsonl").open(encoding="utf-8") as f:
+        rows = [json.loads(line) for line in f]
+    results = []
+    for r in rows:
+        if any(p.startswith("error:") for p in r["problems"]):
+            results.append(r)                             # a crash stays a crash
+            continue
+        answer = scoring.Answer(r["text"], r["alternatives"], r["uncertain"], r["json_ok"], r["raw"], r.get("json_error"))
+        extra = {k: r[k] for k in ("path", "guard_reason", "cut_off") if k in r}
+        results.append(scoring.result_row(cases[r["id"]], answer, r["ms"], r["tokens"], extra))
+    with (folder / "results.jsonl").open("w", encoding="utf-8") as f:
+        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in results)
+    meta = json.loads((folder / "summary.json").read_text(encoding="utf-8"))["meta"]
+    meta["rescored"] = time.strftime("%Y-%m-%d %H:%M")
+    _write_summary(folder, results, meta)
 
 
 def make_backend(args):
@@ -103,7 +128,9 @@ def make_backend(args):
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Score a dictation clean-up backend on eval/dictation_cleanup/testset.csv.")
-    p.add_argument("--backend", choices=["current", "transformers", "fake"], required=True)
+    p.add_argument("--backend", choices=["current", "transformers", "fake"])
+    p.add_argument("--rescore", type=Path, nargs="+", metavar="RUN_FOLDER",
+                   help="re-run the automatic checks on finished runs (no model needed)")
     p.add_argument("--model", help="model name (transformers), or an override of rewrite_model (current)")
     p.add_argument("--prompt", default="v1_plain", help="prompt version in prompts/ (not used by current)")
     p.add_argument("--split", choices=list(scoring.SPLITS), default="dev")
@@ -113,6 +140,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limit", type=int, default=0, help="only the first N cases")
     p.add_argument("--out", type=Path, default=RUNS, help="where run folders go")
     args = p.parse_args(argv)
+    if args.rescore:
+        for folder in args.rescore:
+            rescore(folder)
+            print(f"Rescored: {folder / 'summary.md'}")
+        return 0
+    if not args.backend:
+        p.error("--backend is required (or --rescore)")
     if args.split == "holdout":
         print("WARNING: running the HOLDOUT split. Use it only to report results after the pass bar is set, "
               "never to tune prompts or train.")

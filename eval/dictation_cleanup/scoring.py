@@ -115,7 +115,7 @@ def _names(text: str) -> set[str]:
     for token in text.split():
         core = re.sub(r"^[^\w']+|[^\w']+$", "", token.replace("’", "'"))
         word = _word(token)
-        if core and not start and core[0].isupper() and word not in {"i", "i'm", "i'll", "i've", "i'd"}:
+        if core and not start and core[0].isupper() and word not in {"i", "i'm", "i'll", "i've", "i'd"} | _TITLES:
             names.add(word)
         start = bool(re.search(r"[.!?][\"')\]]*$", token)) and word not in _TITLES
     return names
