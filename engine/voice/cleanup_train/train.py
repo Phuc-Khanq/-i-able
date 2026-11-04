@@ -2,6 +2,7 @@
 
     .\\.venv\\Scripts\\python.exe -m engine.voice.cleanup_train.train --max-steps 5      # smoke test, about a minute
     .\\.venv\\Scripts\\python.exe -m engine.voice.cleanup_train.train --name pilot       # data/cleanup_train/pilot.jsonl
+    .\\.venv\\Scripts\\python.exe -m engine.voice.cleanup_train.train --name big2 --data big2_train --rank 32
 
 Close the engine first: the 16 GB card fits one heavy job at a time.
 
@@ -168,8 +169,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--epochs", type=float, default=3.0)
     p.add_argument("--lr", type=float, default=2e-4)
     p.add_argument("--max-steps", type=int, default=0, help="stop after N optimizer steps (smoke test)")
+    p.add_argument("--rank", type=int, default=16, help="LoRA rank r (big1: 16)")
+    p.add_argument("--alpha", type=int, default=0, help="LoRA alpha; 0 = twice the rank")
     args = p.parse_args(argv)
-    cfg = TrainConfig(name=args.name, data=args.data, epochs=args.epochs, lr=args.lr, max_steps=args.max_steps)
+    cfg = TrainConfig(name=args.name, data=args.data, epochs=args.epochs, lr=args.lr, max_steps=args.max_steps,
+                      lora_r=args.rank, lora_alpha=args.alpha or 2 * args.rank)
     print(json.dumps(train(cfg), indent=2))
     return 0
 

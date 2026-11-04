@@ -43,6 +43,23 @@ class NoiseTest(unittest.TestCase):
         b = noise.messy("Can you water the plants while I'm away?", random.Random(3))
         self.assertEqual(a, b)
 
+    def test_careful_noise_keeps_a_question_and_a_noun_will(self):
+        question = "Can you send the report to my boss?".split()
+        will = "I need to update my will this week.".split()
+        for s in range(100):
+            self.assertEqual(noise.drop_small_words(question, random.Random(s), careful=True)[0], "Can")
+            self.assertIn("will", noise.drop_small_words(will, random.Random(s), careful=True))
+        dropped = [noise.drop_small_words(question, random.Random(s))[0] for s in range(100)]
+        self.assertIn("you", dropped)                    # big1's noise did drop it
+
+    def test_careful_noise_makes_the_same_random_draws(self):
+        toks = "Will you take the dog to the park for me?".split()
+        for s in range(50):
+            a, b = random.Random(s), random.Random(s)
+            noise.drop_small_words(toks, a)
+            noise.drop_small_words(toks, b, careful=True)
+            self.assertEqual(a.random(), b.random())     # so big1's data still rebuilds byte for byte
+
 
 class LeakCheckTest(unittest.TestCase):
     @classmethod
@@ -200,6 +217,77 @@ class BigSetTest(unittest.TestCase):
     def test_must_keep_finds_names_and_numbers(self):
         keep = self.bigset.keep_items("Ask Dr. Lee about the two pills on Friday.", ["pills"])
         self.assertEqual(keep.split("|"), ["pills", "Lee", "two", "Friday"])
+
+
+class MoreDataTest(unittest.TestCase):
+    """big2's training data (bigset.make_more): training only, scored on a test set already written."""
+
+    @classmethod
+    def setUpClass(cls):
+        from engine.voice.cleanup_train import bigset, fields_big2
+
+        cls.bigset = bigset
+        train, test, notes = bigset.make(seed=11)
+        cls.tmp = tempfile.TemporaryDirectory()
+        bigset.write("t", train[:10], test, notes, 11, out_dir=Path(cls.tmp.name))
+        cls.test_path = Path(cls.tmp.name) / "t_test.csv"
+        cls.test = test
+        cls.more, cls.notes = bigset.make_more(cls.test_path, seed=21, train_size=6000, passes=1,
+                                               extra_fields=fields_big2.FIELDS[:4])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_nothing_from_the_test_set(self):
+        meant = lambda c: c["target"]["text"].lower()
+        self.assertEqual(len(self.more), 6000)
+        self.assertFalse({meant(c) for c in self.test} & {meant(c) for c in self.more})
+        self.assertFalse({c["asr_best"] for c in self.test} & {c["asr_best"] for c in self.more})
+        forms = self.bigset.test_term_forms()
+        self.assertIn("Medicare", forms)
+        self.assertFalse([c for c in self.more if self.bigset.mentions_any(c, forms)])
+
+    def test_targeted_kinds_are_in(self):
+        kinds = {c["kind"].split(":")[0] for c in self.more}
+        for k in ("unused_words", "broken_question", "misspelled_date", "misspelled_amount", "term_fix"):
+            self.assertIn(k, kinds)
+        for c in self.more:
+            if c["kind"] == "unused_words":
+                for w in c["personal_words"].split("|"):
+                    self.assertNotIn(w.lower(), c["target"]["text"].lower())
+
+    def test_misspelled_numbers_read_as_the_same_number_in_the_guard(self):
+        from engine.voice import rewrite
+
+        same = lambda a, b: rewrite._number_stems(a.split()) == rewrite._number_stems(b.split())
+        for ordinal, forms in self.bigset.ORDINAL_FORMS.items():
+            for form in forms:
+                self.assertTrue(same(ordinal.replace("-", " "), form), form)
+        for number, form in self.bigset.AMOUNT_FORMS:
+            self.assertTrue(same(number, form), form)
+
+    def test_new_banks_avoid_test_terms(self):
+        from engine.voice.cleanup_train import fields_big2
+
+        forms = self.bigset.test_term_forms()
+        for f in fields_big2.FIELDS:
+            for text in [*f.sentences, *f.befores, *f.apps, *f.terms]:
+                self.assertFalse([x for x in forms if self.bigset._term_in(x, text)], (f.name, text))
+
+
+class TrainArgsTest(unittest.TestCase):
+    def test_rank_sets_alpha_to_twice_the_rank(self):
+        from unittest import mock
+
+        from engine.voice.cleanup_train import train
+
+        with mock.patch.object(train, "train", return_value={}) as fake:
+            train.main(["--name", "x", "--rank", "32"])
+            train.main(["--name", "y", "--rank", "32", "--alpha", "32"])
+            train.main(["--name", "z"])
+        cfgs = [call.args[0] for call in fake.call_args_list]
+        self.assertEqual([(c.lora_r, c.lora_alpha) for c in cfgs], [(32, 64), (32, 32), (16, 32)])
 
 
 class ExportTest(unittest.TestCase):

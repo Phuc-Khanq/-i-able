@@ -75,11 +75,11 @@ def case(kind: str, app: str, before: str, heard: str, target: dict, other: str 
 
 
 def examples(rng: random.Random, leak: LeakCheck, variants: int = 2, extra: bool = False,
-             generated: dict | None = None) -> tuple[list[dict], list[str]]:
+             generated: dict | None = None, careful: bool = False) -> tuple[list[dict], list[str]]:
     """Every training example, and a note for each one the leak check dropped.
 
     extra=True adds seeds_extra.py; generated={"corrections": n, "negations": n, "numbers": n} adds that many
-    template cases (templates.py). The pilot used neither.
+    template cases (templates.py). The pilot used neither. careful: noise.drop_small_words (big2 on).
     """
     mods = [seeds]
     if extra:
@@ -104,7 +104,7 @@ def examples(rng: random.Random, leak: LeakCheck, variants: int = 2, extra: bool
             out.append(case("clean", app, before, text, answer(text)))
         for v in range(variants):
             broken = v == 1 and rng.random() < 0.5
-            heard, misspelled = noise.messy(text, rng, leak.swap_words, broken=broken)
+            heard, misspelled = noise.messy(text, rng, leak.swap_words, broken=broken, careful=careful)
             other = re.sub(r"[.?!]+$", "", text) if misspelled and rng.random() < 0.4 else ""
             out.append(case("broken" if broken else "messy", app, before, heard, answer(text), other))
     for app, before, text in rows("CASUAL"):

@@ -95,8 +95,25 @@ def add_restart(toks: list[str], rng: random.Random) -> list[str]:
     return head[:-1] + [head[-1] + ","] + [toks[0].lower() if toks[0] != "I" else "I"] + toks[1:]
 
 
-def drop_small_words(toks: list[str], rng: random.Random, p: float = 0.6) -> list[str]:
-    kept = [t for i, t in enumerate(toks) if _core(t).lower() not in FUNCTION_WORDS or rng.random() > p]
+# Careful noise (big2 on): a dropped first word can turn a question into a statement ("Can you call me" ->
+# "you call me"), and "will" or "can" after "my", "a" or "the" is a noun ("my will", "a can of soup"). The
+# answer can't be recovered from what's left, so these are never dropped.
+QUESTION_STARTS = {"can", "will", "do", "does", "is", "am", "are"}
+DETERMINERS = {"my", "a", "an", "the", "your", "his", "her", "our", "their", "that", "this"}
+
+
+def must_stay(toks: list[str], i: int) -> bool:
+    low = _core(toks[i]).lower()
+    if i == 0 and low in QUESTION_STARTS:
+        return True
+    return low in {"will", "can"} and i > 0 and _core(toks[i - 1]).lower() in DETERMINERS
+
+
+def drop_small_words(toks: list[str], rng: random.Random, p: float = 0.6, careful: bool = False) -> list[str]:
+    """Drops small words (as a slurred or broken sentence loses them). careful=False is big1's noise; True keeps
+    a question's first word and a noun "will" or "can". The random draws are the same either way."""
+    kept = [t for i, t in enumerate(toks) if _core(t).lower() not in FUNCTION_WORDS or rng.random() > p
+            or (careful and must_stay(toks, i))]
     return kept if len(kept) >= 2 else toks
 
 
@@ -128,13 +145,15 @@ def recognizer_style(text: str, rng: random.Random) -> str:
     return re.sub(r"[.?!,;]", "", text).lower().replace(" i ", " I ").replace("i'm", "I'm").replace("i'll", "I'll")
 
 
-def messy(text: str, rng: random.Random, blocked: set[str] = frozenset(), broken: bool = False) -> tuple[str, int]:
-    """One messy hearing of a clean sentence: 1 to 3 kinds of noise. Returns (heard, misspelled word count)."""
+def messy(text: str, rng: random.Random, blocked: set[str] = frozenset(), broken: bool = False,
+          careful: bool = False) -> tuple[str, int]:
+    """One messy hearing of a clean sentence: 1 to 3 kinds of noise. Returns (heard, misspelled word count).
+    careful: see drop_small_words."""
     toks = words(text)
     kinds = rng.sample(["stutter", "filler", "restart", "misspell"], k=rng.choice([1, 2, 2, 3]))
     misspelled = 0
     if broken:
-        toks = drop_small_words(toks, rng)
+        toks = drop_small_words(toks, rng, careful=careful)
     if "misspell" in kinds:
         toks, misspelled = add_misspellings(toks, rng, rng.choice([1, 1, 2]), blocked)
     if "restart" in kinds:

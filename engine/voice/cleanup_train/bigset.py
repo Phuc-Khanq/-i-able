@@ -164,7 +164,7 @@ def cut_off(text: str, rng: random.Random) -> str | None:
     return " ".join(words_[: rng.choice(spots)]) if spots else None
 
 
-def field_examples(f: Field, rng: random.Random, blocked: set[str]) -> list[dict]:
+def field_examples(f: Field, rng: random.Random, blocked: set[str], careful: bool = False) -> list[dict]:
     out: list[dict] = []
     by_side: dict[str, list[str]] = defaultdict(list)
     for text in f.sentences:
@@ -179,7 +179,7 @@ def field_examples(f: Field, rng: random.Random, blocked: set[str]) -> list[dict
         out.append(example("clean", "clean_control", "unchanged", app, before(), noise.recognizer_style(text, rng),
                            build.answer(text), field=f.name, where=where))
         for broken in (False, False, True) + ((False,) if where == "train" else ()):   # one more noisy copy to learn from
-            heard, miss = noise.messy(text, rng, blocked, broken=broken)
+            heard, miss = noise.messy(text, rng, blocked, broken=broken, careful=careful)
             cat = ("mixed" if miss else "broken_structure") if broken else ("mispronounced" if miss else "broken_structure")
             other = re.sub(r"[.?!]+$", "", text) if miss and rng.random() < 0.3 else ""
             out.append(example("broken" if broken else "messy", cat, "rewrite", app, before(), heard, build.answer(text),
@@ -196,7 +196,7 @@ def field_examples(f: Field, rng: random.Random, blocked: set[str]) -> list[dict
                            build.answer(build._sentence(heard), [build._sentence(other)], True), other, field=f.name,
                            where=where, intended=f"{build._sentence(heard)} || {build._sentence(other)}"))
     for where, texts in by_side.items():
-        out += passages(f, texts, rng, where, blocked)
+        out += passages(f, texts, rng, where, blocked, careful)
     return out
 
 
@@ -243,7 +243,8 @@ def corrections_in(f: Field, text: str, rng: random.Random, where: str, app: str
     return []
 
 
-def passages(f: Field, texts: list[str], rng: random.Random, where: str, blocked: set[str]) -> list[dict]:
+def passages(f: Field, texts: list[str], rng: random.Random, where: str, blocked: set[str],
+             careful: bool = False) -> list[dict]:
     """Two or three sentences of one field dictated in one go, each with its own noise."""
     texts = list(texts)
     rng.shuffle(texts)
@@ -254,7 +255,7 @@ def passages(f: Field, texts: list[str], rng: random.Random, where: str, blocked
         parts, misses = [], 0
         for t in group:
             if rng.random() < 0.7:
-                heard, miss = noise.messy(t, rng, blocked)
+                heard, miss = noise.messy(t, rng, blocked, careful=careful)
                 misses += miss
             else:
                 heard = noise.recognizer_style(t, rng)
@@ -432,13 +433,230 @@ def write(name: str, train: list[dict], test: list[dict], notes: dict, seed: int
     return info
 
 
+# ------------------------------------------------------------------ big2: more training data, same test set
+# Dates said with a misspelled ordinal: the recognizer's spelling is wrong, the day is not. Every form sounds like
+# one ordinal only (never "thirteeth": thirteenth or thirtieth?), and the app's guard reads it as that number
+# (rewrite._number_stems: 5+ letters, close in spelling), so the answer the model learns isn't blocked. Short
+# forms such as "furst" or "fith" are left out for that reason (tests/test_cleanup_train.py checks it).
+ORDINAL_FORMS = {"second": ["secund", "seckond"], "fourth": ["fourf"], "seventh": ["sevenf"], "ninth": ["nineth"],
+                 "tenth": ["tenthe"], "eleventh": ["elevent", "elevenf"], "twelfth": ["twelth"],
+                 "fifteenth": ["fifteend", "fiftenth"], "sixteenth": ["sixteenf", "sixteeth"],
+                 "eighteenth": ["eighteenf", "eightenth"], "twentieth": ["twentyeth", "twenteth"],
+                 "twenty-second": ["twenty secund"], "thirtieth": ["thirtyeth", "thirtith"],
+                 "thirty-first": ["thirty first"]}
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December"]
+DATE_FRAMES = ["My appointment is on the {o} of {m}.", "The rent is due on the {o}.",
+               "Her birthday is on the {o} of {m}.", "The party moved to the {o}.", "We fly out on {m} {o}.",
+               "Payday is on the {o} of every month.", "The deadline for the form is the {o}.",
+               "I'll be back home on the {o} of {m}.", "Can we meet on the {o} instead?", "My lease ends on {m} {o}.",
+               "The new wheelchair arrives on the {o}.", "Is the hearing still on the {o} of {m}?",
+               "Please put the {o} on my calendar.", "The pharmacy said the refill is ready on the {o}."]
+# Amounts said with a misspelled number word: "five thowsand dollers" is still five thousand dollars.
+AMOUNT_FORMS = [("five thousand", "five thowsand"), ("two hundred", "two hunderd"), ("three thousand", "three thousan"),
+                ("fifteen hundred", "fifteen hundered"), ("six thousand", "six thowsand"),
+                ("eight hundred", "eight hundered"), ("ten thousand", "ten thousend"), ("seven hundred", "seven hundrid"),
+                ("twelve hundred", "twelve hunderd"), ("nine hundred", "nine hunderd")]
+AMOUNT_FRAMES = ["The repair will cost {n} dollars.", "I still owe the hospital {n} dollars.",
+                 "The grant pays {n} dollars a year.", "We raised {n} dollars at the fundraiser.",
+                 "The new van costs about {n} dollars more.", "Can you lend me {n} dollars until Friday?",
+                 "My deposit was {n} dollars.", "The insurance covered {n} dollars of the bill."]
+DOLLAR_FORMS = ["dollars", "dollars", "dollers", "dolars"]
+
+
+def frozen_test(path: Path) -> list[dict]:
+    """A test set already written by write(), as the cases drop_close() compares against."""
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+    out = []
+    for r in rows:
+        meant = [m.strip() for m in r["intended"].split("||")]
+        alts = meant[1:] + ([r["asr_alt1"]] if r["asr_alt1"] else [])
+        out.append({"asr_best": r["asr_best"], "target": {"text": meant[0], "alternatives": alts}})
+    return out
+
+
+def test_term_forms() -> list[str]:
+    """Every test-side term and every way it's misheard: no training input or answer may contain one."""
+    return sorted({form for f in all_fields() for t, forms in f.terms.items() if side(f"term:{t}") == "test"
+                   for form in [t, *forms]}, key=len, reverse=True)
+
+
+def mentions_any(c: dict, forms: list[str]) -> bool:
+    texts = [c["asr_best"], c["asr_alt1"], c["context"], c["personal_words"].replace("|", " ; "),
+             c["target"]["text"], *c["target"]["alternatives"]]
+    return any(_term_in(form, t) for t in texts if t for form in forms)
+
+
+def targeted_examples(fields: list[Field], rng: random.Random, blocked: set[str], usable,
+                      banned: frozenset[str] = frozenset()) -> list[dict]:
+    """Kinds big1 got wrong (review of 2026-11-03): list words that don't fit stay out; the list word that does
+    fit is used; a misspelled date or amount keeps its number; a broken question stays a question.
+    `usable(field, sentence)` says whether a sentence may be trained on; `banned` terms never go on a word list."""
+    out: list[dict] = []
+    for f in fields:
+        for text in f.sentences:
+            if not usable(f, text):
+                continue
+            free = [t for t in f.terms if not _term_in(t, text) and t not in banned]
+            if free and rng.random() < 0.35:        # the list is there, nothing on it was said: add none of it
+                heard, _ = noise.messy(text, rng, blocked, careful=True)
+                words_ = rng.sample(free, k=min(len(free), rng.choice([1, 2, 3])))
+                out.append(example("unused_words", "broken_structure", "rewrite", rng.choice(f.apps), "", heard,
+                                   build.answer(text), words=words_, field=f.name, keep=keep_items(text)))
+            if text.endswith("?") and rng.random() < 0.6:
+                heard, miss = noise.messy(text, rng, blocked, broken=True, careful=True)
+                out.append(example("broken_question", "mixed" if miss else "broken_structure", "rewrite",
+                                   rng.choice(f.apps), "", heard, build.answer(text), field=f.name,
+                                   keep=keep_items(text)))
+            for term, forms in f.terms.items():     # the misheard term, always with the word list this time
+                m = _term_in(term, text)
+                if not m:
+                    continue
+                misheard = mishearings(term, forms)
+                if misheard:
+                    others = [t for t in f.terms if t != term and t not in banned]
+                    words_ = [term] + rng.sample(others, k=min(len(others), rng.choice([1, 2, 3])))
+                    rng.shuffle(words_)
+                    heard = noise.recognizer_style(_with(text, m, rng.choice(misheard)), rng)
+                    out.append(example("term_fix:words", "mispronounced", "rewrite", rng.choice(f.apps), "", heard,
+                                       build.answer(text), words=words_, field=f.name,
+                                       keep=keep_items(text, [term])))
+                break                               # the first term only, as term_fixes()
+    for frame in DATE_FRAMES:
+        for o in rng.sample(sorted(ORDINAL_FORMS), 6):
+            meant = frame.format(o=o, m=rng.choice(MONTHS))
+            heard = re.sub(r"(?<![\w-])" + re.escape(o) + r"(?![\w-])", rng.choice(ORDINAL_FORMS[o]), meant, count=1)
+            if rng.random() < 0.4:
+                heard = " ".join(noise.add_fillers(heard.split(), rng))
+            out.append(example("misspelled_date", "mispronounced", "rewrite", rng.choice(TEMPLATE_APPS), "",
+                               noise.recognizer_style(heard, rng), build.answer(meant), keep=keep_items(meant, [o])))
+    for frame in AMOUNT_FRAMES:
+        for n, form in rng.sample(AMOUNT_FORMS, 6):
+            meant = frame.format(n=n)
+            heard = meant.replace(n, form, 1).replace("dollars", rng.choice(DOLLAR_FORMS), 1)
+            out.append(example("misspelled_amount", "mispronounced", "rewrite", rng.choice(TEMPLATE_APPS), "",
+                               noise.recognizer_style(heard, rng), build.answer(meant), keep=keep_items(meant)))
+    return out
+
+
+def make_more(test_path: Path, seed: int = 21, train_size: int = 12000, passes: int = 2,
+              extra_fields: list[Field] | None = None) -> tuple[list[dict], dict]:
+    """Training examples only, for an adapter scored on a test set that is already written (big1_test.csv), so
+    its scores compare with big1's. Careful noise throughout (noise.drop_small_words).
+
+    - The old fields' train-side sentences, `passes` times with fresh noise (a different seed each pass); their
+      test-side sentences are never used.
+    - `extra_fields` (banks written after the test set, fields_big2.py): every sentence, unless it names a
+      test-side term.
+    - targeted_examples(), the seeds and the train-side template frames, all with fresh noise.
+    - Then the leak checks: nothing that names a test-side term or a way it's misheard, nothing with a token
+      overlap of 0.6+ to a test text, and build.py's checks against eval/dictation_cleanup/testset.csv.
+    Targeted examples and seeds are all kept; the rest is sampled in the MIX proportions to fill train_size.
+    """
+    if extra_fields is None:
+        from engine.voice.cleanup_train import fields_big2
+
+        extra_fields = fields_big2.FIELDS
+    extra_fields = list(extra_fields)
+    test = frozen_test(test_path)
+    forms = test_term_forms()
+    leak = build.LeakCheck()
+    old = all_fields()
+    pool: list[dict] = []
+    for k in range(passes):
+        rng = random.Random(seed + k)
+        pool += [c for f in old for c in field_examples(f, rng, leak.swap_words, careful=True) if c["side"] == "train"]
+        pool += [c for c in template_examples(rng) if c["side"] == "train"]
+    rng = random.Random(seed + 100)
+    for f in extra_fields:
+        pool += field_examples(f, rng, leak.swap_words, careful=True)
+    extra_names = {f.name for f in extra_fields}
+
+    def usable(f: Field, text: str) -> bool:
+        return f.name in extra_names or sentence_side(f, text) == "train"
+
+    test_terms = frozenset(t for f in old for t in f.terms if side(f"term:{t}") == "test")
+    targeted = targeted_examples(old + extra_fields, rng, leak.swap_words, usable, test_terms)
+    seeds, _ = build.examples(rng, leak, variants=2, extra=True, generated=build.FULL_GENERATED, careful=True)
+    for c in seeds:
+        c.update({"kind": f"seed_{c['kind']}", "field": "seeds"})
+    for c in pool + targeted + seeds:
+        c["side"] = "train"
+    try:
+        shown = str(test_path.relative_to(build.ROOT))
+    except ValueError:
+        shown = str(test_path)
+    notes: dict = {"scored_on": shown, "scored_on_sha256": hashlib.sha256(test_path.read_bytes()).hexdigest()[:16],
+                   "seed": seed, "passes": passes, "extra_fields": len(extra_fields),
+                   "extra_sentences": sum(len(f.sentences) for f in extra_fields)}
+
+    def checked(cases: list[dict], key: str) -> list[dict]:
+        cases = _dedupe(cases)
+        n0 = len(cases)
+        cases = [c for c in cases if not mentions_any(c, forms)]
+        n1 = len(cases)
+        cases = [c for c in cases if not leak.too_close(c["asr_best"], c["target"]["text"])
+                 and not (c["kind"].startswith("term_fix") and leak.uses_test_pair(c["asr_best"], c["target"]["text"]))]
+        n2 = len(cases)
+        cases, close = drop_close(cases, test)
+        notes[f"checks_{key}"] = {"before": n0, "test_term": n0 - n1, "old_testset": n1 - n2, "close_to_test": close,
+                                  "kept": len(cases)}
+        return cases
+
+    targeted, seeds, pool = checked(targeted, "targeted"), checked(seeds, "seeds"), checked(pool, "pool")
+    have = {(c["asr_best"], c["asr_alt1"], c["context"]) for c in targeted + seeds}
+    pool = [c for c in pool if (c["asr_best"], c["asr_alt1"], c["context"]) not in have]
+    room = max(0, train_size - len(targeted) - len(seeds))
+    train = targeted + seeds + (sample(pool, room, rng) if room < len(pool) else pool)
+    rng.shuffle(train)
+    notes["pool_left_after_checks"] = len(pool)
+    return train[:train_size], notes
+
+
+def write_train(name: str, train: list[dict], notes: dict, out_dir: Path = OUT,
+                prompt_name: str = build.PROMPT) -> dict:
+    """The training file and its preview, as write() makes them; no test set."""
+    from eval.dictation_cleanup.prompt_files import load_prompt
+
+    prompt = load_prompt(prompt_name)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (out_dir / f"{name}_train.jsonl").open("w", encoding="utf-8") as f:
+        for c in train:
+            f.write(json.dumps(build.to_chat(c, prompt), ensure_ascii=False) + "\n")
+    with (out_dir / f"{name}_train_preview.csv").open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["kind", "field", "app", "before", "heard", "other_hearing", "word_list", "answer_text",
+                    "alternatives", "uncertain"])
+        for c in train:
+            t = c["target"]
+            w.writerow([c["kind"], c.get("field", ""), c["app"], c["context"], c["asr_best"], c["asr_alt1"],
+                        c["personal_words"], t["text"], " || ".join(t["alternatives"]), t["uncertain"]])
+    info = {"prompt": prompt.name, "prompt_sha256": prompt.sha256, "train": len(train), **notes,
+            "train_by_kind": _count(train, lambda c: c["kind"].split(":")[0]),
+            "train_by_field": _count(train, lambda c: c.get("field", ""))}
+    (out_dir / f"{name}_info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
+    return info
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Build the big clean-up training file and test set from the field banks.")
     p.add_argument("--name", default="big1")
     p.add_argument("--seed", type=int, default=11)
     p.add_argument("--train-size", type=int, default=TRAIN_SIZE)
     p.add_argument("--test-size", type=int, default=TEST_SIZE)
+    p.add_argument("--more-from", default="", help="an existing test CSV (e.g. data/cleanup_train/big1_test.csv): "
+                   "write training data only, to be scored on that test set (make_more)")
+    p.add_argument("--passes", type=int, default=2, help="with --more-from: noisy passes over the old fields")
     args = p.parse_args(argv)
+    if args.more_from:
+        test_path = Path(args.more_from)
+        if not test_path.is_absolute():
+            test_path = build.ROOT / test_path
+        train, notes = make_more(test_path, args.seed, args.train_size, args.passes)
+        info = write_train(args.name, train, notes)
+        print(json.dumps({k: v for k, v in info.items() if k != "train_by_field"}, indent=2))
+        return 0
     train, test, notes = make(args.seed, args.train_size, args.test_size)
     info = write(args.name, train, test, notes, args.seed)
     print(json.dumps({k: v for k, v in info.items() if not k.endswith("_field")}, indent=2))

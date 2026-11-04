@@ -29,7 +29,11 @@ Last updated: 2026-11-03 12:25 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## In progress
 
-- Nothing running. Waiting for the hidden test phrases.
+- 2026-11-03 night: overnight run big2 (Khang: "Yes, start prep"). LoRA rank 32 / alpha 64 (big1: 16 / 32; every
+  layer was already trained), 12,000 examples, 3 epochs, each epoch scored on the unchanged big1_test (2,500) and
+  dev. Data: `bigset.py --more-from data/cleanup_train/big1_test.csv` (careful noise that keeps a question's first
+  word, targeted examples for big1's misses, 16 new field banks in `fields_big2.py`); 0 test sentences, near copies
+  or test terms in it. Then the hidden test phrases.
 
 ## Next
 
