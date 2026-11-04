@@ -69,7 +69,7 @@ if ($cfg.rewrite_dictation -ne $false) {
     if ($cfg.rewrite_backend -eq "llamacpp") {
         # The trained clean-up model: llama-server and the model file are local files (nothing downloads them)
         $server = if ($cfg.llama_server_path) { $cfg.llama_server_path } else { "downloads\llama.cpp\b11960\bin\llama-server.exe" }
-        $gguf = if ($cfg.rewrite_gguf) { $cfg.rewrite_gguf } else { "checkpoints\cleanup\full1\gguf\full1-q8_0.gguf" }
+        $gguf = if ($cfg.rewrite_gguf) { $cfg.rewrite_gguf } else { "checkpoints\cleanup\big1\gguf\big1-q8_0.gguf" }
         if (Test-Path $server) { Ok "llama-server found: $server" } else { Fail "llama-server not found: $server (llama.cpp b11960, see docs/DECISIONS.md)" }
         if (Test-Path $gguf) { Ok "clean-up model file found: $gguf" } else { Fail "clean-up model file not found: $gguf (make it with engine.voice.cleanup_train.export)" }
         if ("$gguf" -like "*q4_k_m*") { $need += 3300 } else { $need += 5000 }

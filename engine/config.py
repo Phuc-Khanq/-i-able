@@ -111,8 +111,9 @@ class Settings:
     # "llamacpp": our trained clean-up model (one GGUF file) in llama.cpp's llama-server, on this PC only; about
     # 0.35 s and 5 GB of GPU memory on the 5080 (docs/DECISIONS.md, 2026-11-03). "transformers": rewrite_model.
     rewrite_backend: str = "transformers"
-    rewrite_gguf: str = "checkpoints/cleanup/full1/gguf/full1-q8_0.gguf"        # llamacpp: the model file
-                                                                                # (export.py makes it; git-ignored)
+    rewrite_gguf: str = "checkpoints/cleanup/big1/gguf/big1-q8_0.gguf"          # llamacpp: the model file, big1
+                                                                                # (DECISIONS 2026-11-04; export.py
+                                                                                # makes it; git-ignored)
     llama_server_path: str = "downloads/llama.cpp/b11960/bin/llama-server.exe"  # llamacpp: llama.cpp b11960 (MIT)
     rewrite_words: str = ""            # names and words you use, comma-separated ("Priya, Dr. Okafor, baclofen");
                                        # llamacpp only: the model may fix a misheard word to one of these

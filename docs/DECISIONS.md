@@ -204,6 +204,11 @@ Why: big2's data drops every test-side term, which explains about 9 of the 30 ca
 Evidence: `eval/dictation_cleanup/reviews/2026-11-04_big2_vs_big1.md`; run folders `runs/2026-11-04_big2-*`; `checkpoints/cleanup/big2/results.json`.
 Decided by: measured by Claude in the overnight run Khang approved ("Yes, start prep"); the app default stays Khang's call (Proposed, below, still names big1).
 
+**2026-11-04. The app's clean-up model file is big1 Q8_0.**
+Agreed from the proposal below (2026-11-03, `rewrite_gguf`; it replaces that item). `engine/config.py` `rewrite_gguf` and the fallback in `scripts/preflight.ps1` now point to `checkpoints/cleanup/big1/gguf/big1-q8_0.gguf` (was full1). It takes effect only with `rewrite_backend: "llamacpp"`; the default backend is still `transformers` (Qwen2.5-3B), a separate decision.
+Evidence: big1 beats full1 (2026-11-03 entry) and big2 (2026-11-04 entry). Tests: 1,078 pass.
+Decided by: Khang ("Yes, switch").
+
 ---
 
 ## Proposed, not yet agreed
