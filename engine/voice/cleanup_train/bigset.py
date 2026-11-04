@@ -540,8 +540,79 @@ def targeted_examples(fields: list[Field], rng: random.Random, blocked: set[str]
     return out
 
 
+# ------------------------------------------------------------------ big3: more nuance (2026-11-04)
+TWO_READINGS = {"ambiguous", "negation_pair", "number_pair", "name_pair", "seed_ambiguous", "seed_context_ambiguous"}
+
+
+def noisy_two_readings(cases: list[dict], rng: random.Random, limit: int = 1000) -> list[dict]:
+    """A sentence with two possible readings, said with fillers, a stutter or a restart: the answer cleans the
+    noise and still shows both readings ("Tell, um, Alix I'm coming" -> "Tell Alix I'm coming." with "Tell Alex
+    I'm coming." as the other reading). In big1's and big2's data every unsure answer kept the heard words
+    exactly, noise and all, so "unsure" and "leave the stutters in" were the same thing. The words that tell the
+    readings apart are never touched; the answer is the case's own (already leak-checked) answer."""
+    pairs = [c for c in cases if c["kind"].split(":")[0] in TWO_READINGS and c["target"]["uncertain"]
+             and c["target"]["alternatives"]]
+    rng.shuffle(pairs)
+    out = []
+    for c in pairs[:limit]:
+        toks = c["asr_best"].split()
+        shared = _tokens(" ".join(c["target"]["alternatives"]))
+        safe = [i for i, t in enumerate(toks) if noise._core(t).lower() in shared and not noise.protected(t, i)]
+        if safe and rng.random() < 0.6:
+            i = rng.choice(safe)
+            toks[i] = noise.stutter(toks[i], rng)
+        if rng.random() < 0.3:
+            toks = noise.add_restart(toks, rng)
+        toks = noise.add_fillers(toks, rng, rng.choice([1, 1, 2]))
+        out.append(dict(c, kind="noisy_two_readings", asr_best=noise.recognizer_style(" ".join(toks), rng),
+                        target=dict(c["target"]), side="train"))
+    return out
+
+
+def casual_cleans(fields: list[Field], rng: random.Random, usable) -> list[dict]:
+    """Casual but correct: a request said without "please". The answer is the sentence as said; adding "please"
+    (or "the", "to") to a sentence that was fine is an over-edit, which big2 did 14 times in 378."""
+    out = []
+    for f in fields:
+        for text in f.sentences:
+            if not usable(f, text):
+                continue
+            m = re.match(r"(?i)please,? (\w)", text)
+            if m:
+                casual = text[m.start(1)].upper() + text[m.start(1) + 1:]
+            elif re.search(r",? please([.!?])$", text):
+                casual = re.sub(r",? please([.!?])$", r"\1", text)
+            else:
+                continue
+            out.append(example("casual_clean", "clean_control", "unchanged", rng.choice(f.apps), "",
+                               noise.recognizer_style(casual, rng), build.answer(casual), field=f.name,
+                               keep=keep_items(casual)))
+    return out
+
+
+def watch_chats(test_path: Path, n: int = 400, seed: int = 5, prompt_name: str = build.PROMPT) -> list[dict]:
+    """A fixed sample of a written test set as chats, for the trainer's loss check: the loss on sentences and
+    terms the model never trains on, next to the loss on what it does train on. Measured only, never trained on.
+    The answer follows the training conventions: two readings or a cut-off sentence are marked unsure."""
+    from eval.dictation_cleanup.prompt_files import load_prompt
+
+    prompt = load_prompt(prompt_name)
+    with test_path.open(encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+    rows = random.Random(seed).sample(rows, min(n, len(rows)))
+    out = []
+    for r in rows:
+        meant = [m.strip() for m in r["intended"].split("||")]
+        unsure = r["expected_behavior"] in ("show_both", "keep_original_and_flag")
+        c = {"kind": f"watch:{r['category']}", "app": r["app"], "context": r["context"], "asr_best": r["asr_best"],
+             "asr_alt1": r["asr_alt1"], "asr_alt2": r.get("asr_alt2", ""), "personal_words": r["personal_words"],
+             "target": build.answer(meant[0], meant[1:], unsure)}
+        out.append(build.to_chat(c, prompt))
+    return out
+
+
 def make_more(test_path: Path, seed: int = 21, train_size: int = 12000, passes: int = 2,
-              extra_fields: list[Field] | None = None) -> tuple[list[dict], dict]:
+              extra_fields: list[Field] | None = None, nuance: bool = False) -> tuple[list[dict], dict]:
     """Training examples only, for an adapter scored on a test set that is already written (big1_test.csv), so
     its scores compare with big1's. Careful noise throughout (noise.drop_small_words).
 
@@ -553,6 +624,7 @@ def make_more(test_path: Path, seed: int = 21, train_size: int = 12000, passes: 
     - Then the leak checks: nothing that names a test-side term or a way it's misheard, nothing with a token
       overlap of 0.6+ to a test text, and build.py's checks against eval/dictation_cleanup/testset.csv.
     Targeted examples and seeds are all kept; the rest is sampled in the MIX proportions to fill train_size.
+    nuance (big3): also noisy_two_readings() and casual_cleans(), leak-checked the same way and all kept.
     """
     if extra_fields is None:
         from engine.voice.cleanup_train import fields_big2
@@ -605,13 +677,18 @@ def make_more(test_path: Path, seed: int = 21, train_size: int = 12000, passes: 
         return cases
 
     targeted, seeds, pool = checked(targeted, "targeted"), checked(seeds, "seeds"), checked(pool, "pool")
+    if nuance:
+        targeted += checked(noisy_two_readings(targeted + seeds + pool, rng) + casual_cleans(old + extra_fields, rng,
+                                                                                            usable), "nuance")
     have = {(c["asr_best"], c["asr_alt1"], c["context"]) for c in targeted + seeds}
     pool = [c for c in pool if (c["asr_best"], c["asr_alt1"], c["context"]) not in have]
     room = max(0, train_size - len(targeted) - len(seeds))
     train = targeted + seeds + (sample(pool, room, rng) if room < len(pool) else pool)
     rng.shuffle(train)
+    train = train[:train_size]
     notes["pool_left_after_checks"] = len(pool)
-    return train[:train_size], notes
+    notes["unique_answers"] = len({c["target"]["text"].lower() for c in train})
+    return train, notes
 
 
 def write_train(name: str, train: list[dict], notes: dict, out_dir: Path = OUT,
@@ -648,13 +725,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--more-from", default="", help="an existing test CSV (e.g. data/cleanup_train/big1_test.csv): "
                    "write training data only, to be scored on that test set (make_more)")
     p.add_argument("--passes", type=int, default=2, help="with --more-from: noisy passes over the old fields")
+    p.add_argument("--nuance", action="store_true", help="with --more-from: add big3's kinds (noisy two readings, "
+                   "casual requests) and write <test>_watch.jsonl for the trainer's loss check")
     args = p.parse_args(argv)
     if args.more_from:
         test_path = Path(args.more_from)
         if not test_path.is_absolute():
             test_path = build.ROOT / test_path
-        train, notes = make_more(test_path, args.seed, args.train_size, args.passes)
+        train, notes = make_more(test_path, args.seed, args.train_size, args.passes, nuance=args.nuance)
         info = write_train(args.name, train, notes)
+        if args.nuance:
+            watch = OUT / f"{test_path.stem}_watch.jsonl"
+            with watch.open("w", encoding="utf-8") as f:
+                for chat in watch_chats(test_path):
+                    f.write(json.dumps(chat, ensure_ascii=False) + "\n")
+            print(f"loss-check file (measured, never trained on): {watch}")
         print(json.dumps({k: v for k, v in info.items() if k != "train_by_field"}, indent=2))
         return 0
     train, test, notes = make(args.seed, args.train_size, args.test_size)

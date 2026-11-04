@@ -209,6 +209,12 @@ Agreed from the proposal below (2026-11-03, `rewrite_gguf`; it replaces that ite
 Evidence: big1 beats full1 (2026-11-03 entry) and big2 (2026-11-04 entry). Tests: 1,078 pass.
 Decided by: Khang ("Yes, switch").
 
+**2026-11-04. Training runs measure over- and underfitting, and big3 doubles the data.**
+Khang: "I would like to train on at least 100,000 at the end", and to know whether the model over- or underfits. `train.py` now takes `--held-back-by sentence` (whole answers held back, so the held-back loss is on sentences never trained on; before, noisy copies of one sentence landed on both sides), `--watch <file>` (a loss on a file never trained on; `bigset --nuance` writes 400 cases of big1_test as `big1_test_watch.jsonl`) and `--check-every N` (a row in `log.jsonl` with the loss on 300 training examples, the held-back sentences and the watch file, dropout off). `bigset --nuance` adds two kinds: a sentence with two readings said with stutters and fillers, answered clean with both readings (in big1's and big2's data every unsure answer kept the noise: 893 of 893 in big1), and requests said without "please" left as they are (big2 added "please" to clean sentences).
+Not built, on purpose: marking every word fixed without a hint as unsure. Dev expects a sure fix when the sentence makes it plain (M22 "cur" -> car, M13 "lice" -> lights, M07 "recipe" -> receipt), so that rule would teach the opposite of the test set. Numbers from sound-alike words ("the tend") also wait: the guard blocks them, dev expects some fixed (M01, M02), and that choice is still open (STATUS, Next 5).
+Evidence so far: training loss ends about 10 times below the held-back loss (big1 0.0011 vs 0.0094; big2 0.0004 vs 0.0040), and rank 32 gave nothing, so the model memorizes more than it generalizes and network size isn't the limit. Different sentences: big1 2,778, big2 4,323, big3 5,752 (24,000 examples).
+Decided by: Khang (double the data, understand the fit), built by Claude.
+
 ---
 
 ## Proposed, not yet agreed

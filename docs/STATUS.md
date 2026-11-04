@@ -30,7 +30,12 @@ Last updated: 2026-11-03 12:25 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## In progress
 
-- Nothing running. big2 is done (below); big1 stays the clean-up candidate.
+- 2026-11-04 night: overnight run big3 (Khang: double the data, and find out whether it over- or underfits).
+  24,000 examples (twice big2; 5,752 different sentences, big2 4,323), rank 32 as big2, 2 epochs; new kinds:
+  noisy sentences with two readings (822) and casual requests left alone (140). Held back by whole sentence, and
+  a loss check every 500 steps on training examples, held-back sentences and 400 test cases (never trained on).
+  Then scored like big2 (final and epoch 1), and the same loss check for big1's and big2's saved epochs.
+  Explainer for the team: `docs/cleanup_model_explained.md`.
 
 ## Next
 
@@ -57,6 +62,11 @@ Last updated: 2026-11-03 12:25 (wrap-up). Session-by-session record: `docs/SESSI
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
 
 ## Ideas (not scheduled)
+
+- Grow the number of different sentences toward Khang's goal of 100,000 examples (today 5,752): new sentence banks
+  at scale, from Claude-written batches or commercially licensed text (licence check first).
+- Use the model's own token probabilities (llama.cpp can report them) to mark an answer unsure.
+- Cheap training tests: learning rate 1e-4; more LoRA dropout; a heavier loss weight on the words that change.
 
 - Show the raw transcript in the preview while the clean-up runs.
 - An "Exact" clean-up level that skips the model completely.

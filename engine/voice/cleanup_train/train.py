@@ -14,6 +14,15 @@ padding), gradient accumulation, gradient checkpointing, bf16.
 Writes checkpoints/cleanup/<name>/: adapter/ (the LoRA weights after the last step, about 120 MB at r=16), epoch1/,
 epoch2/ ... (the same after each earlier epoch), config.json, log.jsonl and results.json (loss before, after and
 per epoch on held-back examples, time, peak GPU memory). checkpoints/ is git-ignored.
+
+Over- or underfitting (big3 on): --held-back-by sentence keeps whole answers out of training, so the held-back
+loss is on sentences never trained on (with "example", noisy copies of the same sentence land on both sides).
+--watch <file> adds a loss on a file that is never trained on (bigset --nuance writes big1_test_watch.jsonl, 400
+test cases). Every --check-every steps, and at each epoch's end, log.jsonl gets a row with "check": the loss on
+300 training examples, on the held-back ones and on the watch file, all with dropout off. Training loss falling
+while the other two rise is overfitting; all three high and flat is underfitting.
+
+    .\\.venv\\Scripts\\python.exe -m engine.voice.cleanup_train.train --name big3 --data big3_train --rank 32 --epochs 2 --held-back-by sentence --watch big1_test_watch --check-every 500
 """
 
 from __future__ import annotations
@@ -47,14 +56,52 @@ class TrainConfig:
     batch_size: int = 8           # examples per optimizer step (gradient accumulation, micro-batch 1)
     warmup_steps: int = 10
     held_back: float = 0.05       # share of the examples kept out of training, for a loss check
+    held_back_by: str = "example"  # "sentence": every example of some answers (see the docstring)
+    watch: str = ""               # data/cleanup_train/<watch>.jsonl: a loss check on it too, never trained on
+    check_every: int = 0          # steps between loss checks; 0 = only at each epoch's end
     max_steps: int = 0            # 0 = run all epochs
     save_epochs: bool = True      # also save the adapter after each epoch (epoch1/, epoch2/ ...)
     seed: int = 1234
 
 
+CHECK_SIZE = 400                  # held-back and watch examples per loss check (a check takes about 2 minutes)
+PROBE_SIZE = 300                  # training examples per loss check
+
+
 def load_chats(name: str) -> list[dict]:
     with (DATA / f"{name}.jsonl").open(encoding="utf-8") as f:
         return [json.loads(line) for line in f]
+
+
+def answer_text(chat: dict) -> str:
+    content = chat["messages"][-1]["content"]
+    try:
+        return json.loads(content)["text"].strip().lower()
+    except (ValueError, KeyError, TypeError):
+        return content.strip().lower()
+
+
+def split_held_back(chats: list[dict], share: float, by: str, rng: random.Random) -> tuple[list[dict], list[dict]]:
+    """(training, held back). `chats` is already shuffled. "example": the first share of them (as big1 and big2).
+    "sentence": whole answers, in random order, until the share is reached, so no held-back answer is trained on."""
+    n_val = max(1, round(len(chats) * share))
+    if by == "example":
+        return chats[n_val:], chats[:n_val]
+    if by != "sentence":
+        raise ValueError(f"held_back_by must be 'example' or 'sentence', not {by!r}")
+    groups: dict[str, list[dict]] = {}
+    for c in chats:
+        groups.setdefault(answer_text(c), []).append(c)
+    keys = list(groups)
+    rng.shuffle(keys)
+    held: set[str] = set()
+    count = 0
+    for k in keys:
+        if count >= n_val:
+            break
+        held.add(k)
+        count += len(groups[k])
+    return [c for c in chats if answer_text(c) not in held], [c for c in chats if answer_text(c) in held]
 
 
 def encode(chat: dict, tok, template) -> dict:
@@ -86,11 +133,12 @@ def train(cfg: TrainConfig, log=print) -> dict:
         template = AutoProcessor.from_pretrained(cfg.base_model)
     chats = load_chats(cfg.data)
     rng.shuffle(chats)
-    n_val = max(1, round(len(chats) * cfg.held_back))
-    val = [encode(c, tok, template) for c in chats[:n_val]]
-    data = [encode(c, tok, template) for c in chats[n_val:]]
-    log(f"{len(data)} training examples, {len(val)} held back; mean length "
-        f"{sum(len(d['input_ids']) for d in data) / len(data):.0f} tokens")
+    train_chats, val_chats = split_held_back(chats, cfg.held_back, cfg.held_back_by, rng)
+    val = [encode(c, tok, template) for c in val_chats]
+    data = [encode(c, tok, template) for c in train_chats]
+    watch = [encode(c, tok, template) for c in load_chats(cfg.watch)] if cfg.watch else []
+    log(f"{len(data)} training examples, {len(val)} held back (by {cfg.held_back_by}), {len(watch)} watched; "
+        f"mean length {sum(len(d['input_ids']) for d in data) / len(data):.0f} tokens")
 
     torch.cuda.reset_peak_memory_stats()
     model, info = AutoModelForCausalLM.from_pretrained(cfg.base_model, dtype=torch.bfloat16, output_loading_info=True)
@@ -110,12 +158,31 @@ def train(cfg: TrainConfig, log=print) -> dict:
         labels = torch.tensor([ex["labels"]], device="cuda")
         return model(input_ids=ids, labels=labels).loss
 
-    def val_loss() -> float:
+    def mean_loss(examples) -> float | None:
+        if not examples:
+            return None
         model.eval()
         with torch.no_grad():
-            v = sum(loss_of(ex).item() for ex in val) / len(val)
+            v = sum(loss_of(ex).item() for ex in examples) / len(examples)
         model.train()
         return round(v, 4)
+
+    def val_loss() -> float:
+        return mean_loss(val)
+
+    checking = bool(cfg.watch) or cfg.check_every > 0 or cfg.held_back_by == "sentence"
+    probe = data[:PROBE_SIZE]
+
+    def check(step: int, f) -> dict:
+        """Loss on training examples, held-back sentences and the watch file, dropout off; a row in log.jsonl."""
+        t = time.perf_counter()
+        row = {"step": step, "check": True, "train": mean_loss(probe), "held_back": mean_loss(val[:CHECK_SIZE]),
+               "watch": mean_loss(watch[:CHECK_SIZE])}
+        row["check_s"] = round(time.perf_counter() - t, 1)
+        f.write(json.dumps(row) + "\n")
+        f.flush()
+        log(f"check at step {step}: train {row['train']} held back {row['held_back']} watch {row['watch']}")
+        return row
 
     steps_per_epoch = max(1, len(data) // cfg.batch_size)
     total = cfg.max_steps or int(steps_per_epoch * cfg.epochs)
@@ -124,9 +191,11 @@ def train(cfg: TrainConfig, log=print) -> dict:
     before = val_loss()
     log(f"held-back loss before training: {before}")
 
-    t0, order, per_epoch = time.perf_counter(), [], {}
+    t0, order, per_epoch, checks = time.perf_counter(), [], {}, []
     model.train()
     with (out / "log.jsonl").open("w", encoding="utf-8") as f:
+        if checking:
+            checks.append(check(0, f))
         for step in range(1, total + 1):
             running = 0.0
             for _ in range(cfg.batch_size):
@@ -151,11 +220,16 @@ def train(cfg: TrainConfig, log=print) -> dict:
                 model.save_pretrained(out / f"epoch{epoch}")
                 per_epoch[f"epoch{epoch}"] = val_loss()
                 log(f"saved epoch{epoch}, held-back loss {per_epoch[f'epoch{epoch}']}")
+            if checking and (step == total or step % steps_per_epoch == 0
+                             or (cfg.check_every and step % cfg.check_every == 0)):
+                checks.append(check(step, f))
 
     after = val_loss()
     model.save_pretrained(out / "adapter")
-    results = {"examples": len(data), "held_back": len(val), "steps": total, "loss_before": before,
-               "loss_after": after, "loss_per_epoch": per_epoch, "minutes": round((time.perf_counter() - t0) / 60, 1),
+    results = {"examples": len(data), "held_back": len(val), "held_back_by": cfg.held_back_by,
+               "watched": len(watch), "steps": total, "loss_before": before,
+               "loss_after": after, "loss_per_epoch": per_epoch, "checks": checks,
+               "minutes": round((time.perf_counter() - t0) / 60, 1),
                "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2), "adapter": str(out / "adapter")}
     (out / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     log(f"held-back loss after training: {after}")
@@ -171,9 +245,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-steps", type=int, default=0, help="stop after N optimizer steps (smoke test)")
     p.add_argument("--rank", type=int, default=16, help="LoRA rank r (big1: 16)")
     p.add_argument("--alpha", type=int, default=0, help="LoRA alpha; 0 = twice the rank")
+    p.add_argument("--held-back-by", choices=["example", "sentence"], default="example",
+                   help="hold back random examples (big1, big2) or whole sentences (big3)")
+    p.add_argument("--watch", default="", help="data/cleanup_train/<watch>.jsonl: loss check only, never trained on")
+    p.add_argument("--check-every", type=int, default=0, help="steps between loss checks (0 = each epoch's end)")
     args = p.parse_args(argv)
     cfg = TrainConfig(name=args.name, data=args.data, epochs=args.epochs, lr=args.lr, max_steps=args.max_steps,
-                      lora_r=args.rank, lora_alpha=args.alpha or 2 * args.rank)
+                      lora_r=args.rank, lora_alpha=args.alpha or 2 * args.rank, held_back_by=args.held_back_by,
+                      watch=args.watch, check_every=args.check_every)
     print(json.dumps(train(cfg), indent=2))
     return 0
 

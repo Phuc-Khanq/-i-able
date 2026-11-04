@@ -222,6 +222,8 @@ class BigSetTest(unittest.TestCase):
 class MoreDataTest(unittest.TestCase):
     """big2's training data (bigset.make_more): training only, scored on a test set already written."""
 
+    NUANCE = False
+
     @classmethod
     def setUpClass(cls):
         from engine.voice.cleanup_train import bigset, fields_big2
@@ -233,7 +235,7 @@ class MoreDataTest(unittest.TestCase):
         cls.test_path = Path(cls.tmp.name) / "t_test.csv"
         cls.test = test
         cls.more, cls.notes = bigset.make_more(cls.test_path, seed=21, train_size=6000, passes=1,
-                                               extra_fields=fields_big2.FIELDS[:4])
+                                               extra_fields=fields_big2.FIELDS[:4], nuance=cls.NUANCE)
 
     @classmethod
     def tearDownClass(cls):
@@ -276,7 +278,76 @@ class MoreDataTest(unittest.TestCase):
                 self.assertFalse([x for x in forms if self.bigset._term_in(x, text)], (f.name, text))
 
 
+class NuanceDataTest(MoreDataTest):
+    """big3's kinds (make_more nuance=True). Inherits MoreDataTest, so its leak checks run on this data too."""
+
+    NUANCE = True
+
+    def test_noisy_two_readings_clean_the_noise_and_keep_both(self):
+        noisy = [c for c in self.more if c["kind"] == "noisy_two_readings"]
+        self.assertGreater(len(noisy), 100)
+        for c in noisy:
+            t = c["target"]
+            self.assertTrue(t["uncertain"])
+            self.assertTrue(t["alternatives"])
+            self.assertNotEqual(c["asr_best"], t["text"])
+            # The words that tell the two readings apart are still in what was heard.
+            diff = self.bigset._tokens(t["text"]) - self.bigset._tokens(" ".join(t["alternatives"]))
+            self.assertTrue(diff <= self.bigset._tokens(c["asr_best"]), (c["asr_best"], t))
+
+    def test_casual_requests_stay_casual(self):
+        casual = [c for c in self.more if c["kind"] == "casual_clean"]
+        self.assertGreater(len(casual), 20)
+        for c in casual:
+            self.assertEqual(c["category"], "clean_control")
+            self.assertNotIn("please", c["target"]["text"].lower())
+            self.assertFalse(c["target"]["uncertain"])
+        self.assertIn("checks_nuance", self.notes)
+        self.assertGreater(self.notes["unique_answers"], 1000)
+
+    def test_watch_file_follows_the_training_answers(self):
+        chats = self.bigset.watch_chats(self.test_path, n=200)
+        self.assertEqual(len(chats), 200)
+        self.assertEqual(chats, self.bigset.watch_chats(self.test_path, n=200))      # the same sample every time
+        answers = [json.loads(ch["messages"][-1]["content"]) for ch in chats]
+        kinds = [ch["kind"] for ch in chats]
+        self.assertTrue(all(set(a) == {"text", "alternatives", "uncertain"} for a in answers))
+        both = [a for a, k in zip(answers, kinds) if a["alternatives"]]
+        self.assertTrue(both and all(a["uncertain"] for a in both))
+        self.assertIn("watch:clean_control", kinds)
+
+
 class TrainArgsTest(unittest.TestCase):
+    def test_held_back_by_sentence_never_trains_on_a_held_back_answer(self):
+        import random
+
+        from engine.voice.cleanup_train import train
+
+        chats = [{"messages": [{"role": "user", "content": f"heard {i}"},
+                               {"role": "assistant", "content": json.dumps({"text": f"Sentence {i % 50}.",
+                                                                            "alternatives": [], "uncertain": False})}]}
+                 for i in range(400)]
+        tr, held = train.split_held_back(chats, 0.05, "sentence", random.Random(1))
+        self.assertEqual(len(tr) + len(held), 400)
+        self.assertGreaterEqual(len(held), 20)
+        self.assertFalse({train.answer_text(c) for c in tr} & {train.answer_text(c) for c in held})
+        tr2, held2 = train.split_held_back(chats, 0.05, "example", random.Random(1))
+        self.assertEqual((tr2, held2), (chats[20:], chats[:20]))                     # big1's and big2's split
+        with self.assertRaises(ValueError):
+            train.split_held_back(chats, 0.05, "word", random.Random(1))
+
+    def test_loss_check_flags(self):
+        from unittest import mock
+
+        from engine.voice.cleanup_train import train
+
+        with mock.patch.object(train, "train", return_value={}) as fake:
+            train.main(["--name", "x", "--held-back-by", "sentence", "--watch", "w", "--check-every", "500"])
+            train.main(["--name", "y"])
+        a, b = [call.args[0] for call in fake.call_args_list]
+        self.assertEqual((a.held_back_by, a.watch, a.check_every), ("sentence", "w", 500))
+        self.assertEqual((b.held_back_by, b.watch, b.check_every), ("example", "", 0))
+
     def test_rank_sets_alpha_to_twice_the_rank(self):
         from unittest import mock
 
