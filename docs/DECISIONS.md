@@ -215,6 +215,10 @@ Not built, on purpose: marking every word fixed without a hint as unsure. Dev ex
 Evidence so far: training loss ends about 10 times below the held-back loss (big1 0.0011 vs 0.0094; big2 0.0004 vs 0.0040), and rank 32 gave nothing, so the model memorizes more than it generalizes and network size isn't the limit. Different sentences: big1 2,778, big2 4,323, big3 5,752 (24,000 examples).
 Decided by: Khang (double the data, understand the fit), built by Claude.
 
+**2026-11-03. The clean-up's contract additions and the card's other readings (app plan, steps 1 to 4). Recorded late, at the 2026-11-04 wrap-up.**
+Built on branch `voice-cleanup-app` from `docs/plans/2026-11-03_cleanup_app_integration.md`: step 1, llama-server behind the `Rewriter` (127.0.0.1, a random API key per run, Windows job object; commit 3546167); step 2, the trained model's own guard `check_cleanup` (entry above); step 3, `REWRITE_REQUEST` gains optional `context` and `app`, `REWRITE_RESULT` and `DICTATION_PREVIEW` gain optional `alternatives` and `uncertain`, and the website stores them (138c806); step 4, the card lists the other readings and "option two" picks one, the website panel has Option buttons (69687d2). This partly covers the proposal below ("the clean-up gets ... the last text typed, the app and the user's word list"); Whisper's other candidates are not sent yet.
+Decided by: Khang ("Yeah, let's proceed to the next steps" for step 3; "Yes, build it" on the card's look for step 4), built by Claude. Not yet tried with camera and mic.
+
 ---
 
 ## Proposed, not yet agreed

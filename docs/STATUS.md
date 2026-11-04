@@ -1,73 +1,68 @@
 # Status
 
-Last updated: 2026-11-03 12:25 (wrap-up). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-04 18:20 (wrap-up). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
-- **Dictation clean-up: our own trained model.** big1, a LoRA adapter on Qwen3.5-4B (Apache 2.0) trained on Claude-written examples, is the candidate (replaced full1 on 2026-11-03; big2 didn't beat it on 2026-11-04). Dev full pass 63/67 by Khang's rule, but dev is tuned on, so a fresh hidden test is next. In llama.cpp it answers in 0.29 s median (Q8_0), under the 1.5 s quick clean-up budget.
+- **Dictation clean-up: our own trained model.** big1, a LoRA adapter on Qwen3.5-4B (Apache 2.0) trained on Claude-written examples, is the candidate and the app's model file (`rewrite_gguf`, big1 Q8_0). It runs in llama-server behind the Rewriter (0.28 s median on the 5080), but only with `rewrite_backend: "llamacpp"`; the default backend is still the old Qwen2.5-3B. Dev full pass 63/67 by Khang's rule; dev is tuned on, so the hidden test decides.
+- **Training experiments:** bigger runs (big2) didn't beat big1. The model memorizes more than it generalizes; the limit is how many different sentences the data has (Khang's goal: 100,000 examples). Explainer: `docs/cleanup_model_explained.md`.
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
 ## Done recently
 
-- 2026-11-04: overnight run big2 (LoRA rank 32, 11,400 examples, 3 epochs, 344 min, 5080) loses to big1 on every measure: big1 test automatic 2,411 vs 2,441, clean sentences changed 14 vs 4, the same 150 by Khang's rule 139 vs 141, dev automatic 62 vs 65; no epoch is better. About 9 of the 30 cases come from big2 never seeing the test's terms; the rest is real (it adds small words, breaks questions). `eval/dictation_cleanup/reviews/2026-11-04_big2_vs_big1.md`.
-- 2026-11-03: full1 runs in llama.cpp (MIT, build b11960), 5080, dev: Q8_0 p50/p90/p99 328/378/412 ms (about 5.1 GB), Q4_K_M 264/292/332 (about 3.3 GB), bf16 488/565/603. With greedy decoding it gives the same answers as transformers on all 67 cases. Full pass by Khang's rule 59 to 62 across runs (sampling luck). `engine/voice/cleanup_train/export.py` makes the GGUF files; the eval runs them with `--backend llamacpp`.
-- 2026-11-03: first trained adapter full1: 1,088 examples, 32.7 min on the 5080 (peak 9.5 GB). Dev: automatic 64/67, silent guess 1/10, over-edit 0/10, 0 invented, human full pass 62/67 (93%); p50 1770 ms in transformers.
-- 2026-11-02: training pipeline `engine/voice/cleanup_train/`: Claude-written sentences, speech noise (stutters, fillers, restarts, misspellings), a leak check against the test set, LoRA trainer (peft). Pilot: 300 examples in 9.4 min, full pass 59/67. Training works on Windows with the slow reference kernels; WSL2 wasn't needed.
-- 2026-11-02: holdout, run once with prompt v4: fails the pass bar (full pass 22/33, silent guesses 4/5; today's app 7/33). The holdout is spent.
-- 2026-11-02: prompts v2 to v4 on dev (human full pass v3 53/67, v4 59/67; today's app 17/67); blind review sheets and `--rescore`; plan with the pass bar, agreed by Khang. Khang reviews alone; Claude fills the reviews with his "meaning kept" rule.
-- 2026-11-02: Qwen3.5-4B prompt-only on dev: v1 full prompt 63/67 automatic, p50 1864 ms (today's app 46/67, p50 435 ms).
-- 2026-11-02: `/start` and `/wrap-up` commands; scoring runner in `eval/dictation_cleanup/`; old-name scan (169 lines in about 60 files, about 60 file names); private repo `Phuc-Khanq/-i-able` (remote `origin`; the old public repo is remote `public`); Claude Code setup; test set of 100 cases (33 held out).
+- 2026-11-04: trainer measures over/underfitting (`--held-back-by sentence`, `--watch`, `--check-every`); big3 data (24,000 examples, 5,752 different sentences; noisy two readings, casual requests). Training loss ends about 10x below held-back loss (big1 0.0011 vs 0.0094).
+- 2026-11-04: big2 (rank 32, 11,400 examples, 3 epochs, 344 min) loses to big1 on every measure: test automatic 2,411 vs 2,441, clean sentences changed 14 vs 4, the 150 by Khang's rule 139 vs 141, dev automatic 62 vs 65. `eval/dictation_cleanup/reviews/2026-11-04_big2_vs_big1.md`.
+- 2026-11-04: the app's model file is big1 Q8_0 (was full1).
+- 2026-11-03: big1 (big data set, 2 epochs, 163 min) beats full1: test automatic 2,441 vs 2,389, silent guesses 0 vs 14, the 150: 141 vs 132, dev full pass 63 vs 61.
+- 2026-11-03: app plan steps 1 to 4 built: llama-server behind the Rewriter (127.0.0.1, API key, dies with the engine), the `check_cleanup` guard, contract additions (`context`, `app`, `alternatives`, `uncertain`), the card's other readings ("option two"). Not yet tried with camera and mic.
+- 2026-11-03: big data set (10,000; frozen test set of 2,500 in `data/cleanup_train/big1_test.csv`); licence scan of 91 packages (`docs/licences/`); the app runs without PyAV.
+- 2026-11-03: full1 in llama.cpp (MIT, b11960): Q8_0 p50/p90/p99 328/378/412 ms on dev; greedy gives the same answers as transformers.
+- 2026-11-03: first trained adapter full1: 1,088 examples, 32.7 min; dev full pass 62/67.
+- 2026-11-02: training pipeline `engine/voice/cleanup_train/`; holdout run once with prompt v4 (fails the bar, 22/33; the holdout is spent); prompts v2 to v4; scoring runner; `/start` and `/wrap-up`; private repo `Phuc-Khanq/-i-able` (remote `origin`; old public repo is remote `public`).
 - Earlier: hackathon build (head pointer, long-blink click, voice commands, dictation with preview and clean-up, click by name, website live demo, Windows installer, about 900 tests). See README.
 
 ## How the clean-up guard works today (`engine/voice/rewrite.py`)
 
-- Quick clean-up (`check_rewrite`) rejects the model's text if: length is outside 0.4x to 1.3x; a number goes missing; the count of negations changes ("not", "never", "...n't"); the point of view changes (I / we / you); a name goes missing; a content word is swapped in place for one the original never had ("photos" -> "videos"); under 60% of content words are kept; or over 25% of content words are new. Rejected: `light_clean` (fillers and stutters only) if it passes the same guard, else the user's own words.
-- Whole-passage refine (`check_refine`) is looser: length 0.5x to 1.4x, at least 50% of content words kept, at most 45% new. It may drop numbers only if they were marked unsure, never invents one. Plain "no" isn't counted as a negation ("no wait" is a self-correction). Names and words Whisper was unsure of may change.
-- Hackathon figure (5080, Oct 24, 40 cases): the model's rewrite was used in 17 cases, 23 fell back (`rewrite.py` lines 18-19).
-- Known: the docstring and fallback default in `rewrite.py` still name Qwen2.5-1.5B; `config.py` uses 2.5-3B. Fix it as part of the model switch.
+- Default backend (Qwen2.5-3B): `check_rewrite` rejects the model's text if length is outside 0.4x to 1.3x, a number, name or negation changes, the point of view changes, a content word is swapped, under 60% of content words are kept, or over 25% are new. Then `light_clean`, else the user's own words. The refine (`check_refine`) is looser.
+- Trained model (`llamacpp`): `check_cleanup` blocks a number, name or negation nobody said, one said and gone without a change of mind, or most words gone. Word-list words must sound like what they replace; ordinals and misspelled number words count as numbers. A number from a sound-alike word ("the tend" -> tenth) is blocked.
+- Known: the docstring and fallback default in `rewrite.py` still name Qwen2.5-1.5B. Fix with the backend switch.
 - `testset.csv` starts with a BOM on purpose (for Excel). Read it with `encoding="utf-8-sig"`.
 
 ## In progress
 
-- 2026-11-04 night: overnight run big3 (Khang: double the data, and find out whether it over- or underfits).
-  24,000 examples (twice big2; 5,752 different sentences, big2 4,323), rank 32 as big2, 2 epochs; new kinds:
-  noisy sentences with two readings (822) and casual requests left alone (140). Held back by whole sentence, and
-  a loss check every 500 steps on training examples, held-back sentences and 400 test cases (never trained on).
-  Then scored like big2 (final and epoch 1), and the same loss check for big1's and big2's saved epochs.
-  Explainer for the team: `docs/cleanup_model_explained.md`.
+- big3s: 8,000 random examples of big3's data, rank 32, 2 epochs, loss checks every 500 steps. Started 2026-11-04 18:04, done about 21:35 with scoring. Output: `checkpoints/cleanup/big3s/`, runs `eval/dictation_cleanup/runs/2026-11-04_big3s-*`.
+- big3 (24,000 examples, same recipe, about 9.5 h): starts when Khang says he's going to sleep, not before. Then the loss check of big1's and big2's saved epochs.
 
 ## Next
 
-1. Hidden test: Khang or Hung writes about 35 new phrases (`messy → meant`), spread over misheard words, broken sentences, changes of mind, two possible meanings and already-correct ones. Claude turns them into cases and runs full1 once, as it would ship (llama.cpp Q8_0, greedy, if Khang agrees).
-2. More training data for the cases that fail in every run (M16, M25, S28, X01), then a new adapter.
-3. App change (plan, section 4): llama-server behind the `Rewriter` interface (127.0.0.1, with an API key), the new guard, the card's alternatives; the refine first.
-4. Rename, once the exact name is given.
-5. Decide whether the app's guard should reject invented numbers (M01: "to o'clock" became "1 o'clock" and was accepted).
-6. Light models for weak laptops (Qwen3.5-2B, 0.8B; Q4_K_M or llama.cpp's CPU build), timed on a low-end laptop (8 GB RAM, no NVIDIA GPU).
-7. Licence scan of all Python packages.
+1. big3s and big3 results: does more data help, and where does the held-back loss part from the training loss.
+2. Hidden test: Khang or Hung writes about 35 new phrases (`messy → meant`). Claude turns them into cases and runs the candidate once as it ships (llama.cpp Q8_0, greedy).
+3. Try big1 in the demo with camera and mic (`"rewrite_backend": "llamacpp"` in config.local.json, preflight, run_demo); then decide whether llamacpp becomes the default.
+4. A plan for many more different sentences (toward 100,000 examples): source, licence, cost.
+5. Decide whether the guard rejects numbers from sound-alike words (dev M01 and M02 expect them fixed).
+6. Rename, once the exact name is given.
+7. Light models for weak laptops (Qwen3.5-2B, 0.8B; Q4_K_M or llama.cpp's CPU build), timed on a low-end laptop.
 
 ## Blockers and risks
 
-- Dev is tuned on and the holdout is spent: only the fresh hidden set gives a number to trust.
+- Dev is tuned on and the holdout is spent: only the fresh hidden set gives a number to trust. The 2,500-case test comes from the same generator as the training data.
 - The test cases were invented, not taken from real users. Real users or a speech-language pathologist should review them later.
-- For a lawyer: training on Claude-written sentences (Anthropic's terms forbid it only for competing products; Khang's reading: we don't compete); shipping NVIDIA's CUDA runtime DLLs with llama.cpp; the licence for new private code; IP agreements with everyone who wrote code.
-- Website updates: the live site is served from the public repo, and pushing `main` there would publish the private code. Pick a way to update it (e.g. a separate public repo holding only `eyeable-frontend/`). The Pages workflow will also fail in the private repo until it's switched off there.
+- For a lawyer: training on Claude-written sentences (Anthropic's terms forbid it only for competing products; Khang's reading: we don't compete); shipping NVIDIA's CUDA runtime DLLs with llama.cpp; PyAV stays in training only; the licence for new private code; IP agreements with everyone who wrote code.
+- Website updates: the live site is served from the public repo, and pushing `main` there would publish the private code. Pick a way to update it. The Pages workflow will also fail in the private repo until it's switched off there.
 - Remove the two people who left from the old public repo's collaborators (Khang, on GitHub).
 
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Git-ignored, only on this PC: training data (`data/cleanup_train/`), adapters and GGUF files (`checkpoints/cleanup/`, about 24 GB for full1; `merged/` and the bf16 GGUF can be rebuilt with export.py), llama.cpp (`downloads/llama.cpp/b11960/`).
+- Not pushed: ca754de (big3 data and loss checks) and the 2026-11-04 wrap-up.
+- Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
 
 ## Ideas (not scheduled)
 
-- Grow the number of different sentences toward Khang's goal of 100,000 examples (today 5,752): new sentence banks
-  at scale, from Claude-written batches or commercially licensed text (licence check first).
 - Use the model's own token probabilities (llama.cpp can report them) to mark an answer unsure.
 - Cheap training tests: learning rate 1e-4; more LoRA dropout; a heavier loss weight on the words that change.
-
 - Show the raw transcript in the preview while the clean-up runs.
 - An "Exact" clean-up level that skips the model completely.
 
