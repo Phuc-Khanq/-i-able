@@ -300,14 +300,109 @@ def _negation_kinds(words: list[str]) -> set[str]:
             if w in NEGATIONS or w in {"not", "cannot"} or w.endswith("n't")}
 
 
-def _sounds_heard(name: str, heard_w: list[str]) -> bool:
-    """The name's letters match one to three heard words in a row ("medi cure" -> Medicare,
+def _sounds_heard(name: str, heard_w: list[str], threshold: float = SOUND_ALIKE, longest: int = 3) -> bool:
+    """The name's letters match one to `longest` heard words in a row ("medi cure" -> Medicare,
     "thanks given" -> Thanksgiving), not a different name (Ann -> Dan: 0.67)."""
     from difflib import SequenceMatcher
 
     target = re.sub(r"[^a-z]", "", name)
-    spans = (re.sub(r"[^a-z]", "", "".join(heard_w[i:i + k])) for k in (1, 2, 3) for i in range(len(heard_w)))
-    return any(SequenceMatcher(a=target, b=s).ratio() >= SOUND_ALIKE for s in spans if s)
+    spans = (re.sub(r"[^a-z]", "", "".join(heard_w[i:i + k])) for k in range(1, longest + 1)
+             for i in range(len(heard_w)))
+    return any(SequenceMatcher(a=target, b=s).ratio() >= threshold for s in spans if s)
+
+
+# A word on the user's list is evidence for a misheard word only if it sounds like one to four heard words. Looser
+# than SOUND_ALIKE, since the list says the word is likely ("oh car for" -> Okafor is 0.71), but a list word
+# nothing sounds like is an invented word ("the new dose" -> "the new dose of sertraline").
+LIST_SOUND_ALIKE = 0.6
+
+# Ordinals are numbers too: "the fifteenth of March" -> "the end of March" loses the date. normalize_words writes
+# "15th" as "fifteenth" and "1st" / "2nd" / "3rd" as "onest" / "twond" / "threerd". "second" is left out: it is
+# mostly time ("give me a second").
+ORDINALS = {"first": "one", "onest": "one", "twond": "two", "third": "three", "threerd": "three", "fourth": "four",
+            "fifth": "five", "sixth": "six", "seventh": "seven", "eighth": "eight", "ninth": "nine",
+            "tenth": "ten", "eleventh": "eleven", "twelfth": "twelve", "twentieth": "twenty",
+            "thirtieth": "thirty", "fortieth": "forty", "fiftieth": "fifty", "sixtieth": "sixty",
+            "seventieth": "seventy", "eightieth": "eighty", "ninetieth": "ninety", "hundredth": "hundred",
+            "thousandth": "thousand",
+            **{t + "th": t for t in ("thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+                                     "nineteen")}}
+MISSPELLED_NUMBER = 0.85    # "thowsand" -> thousand (0.88), "fifteend" -> fifteen (0.93), not "there" -> three (0.8)
+NOT_NUMBERS = {"thirsty", "forth", "second", "seconds"}    # real words this close to a number
+_NUMBER_SPELLINGS = sorted({*NUMBER_WORDS, *ORDINALS})
+
+
+def _number_stems(words: list[str]) -> set[str]:
+    """The numbers in the words, as cardinals: "fifteenth" and "fifteend" (misspelled) are both fifteen. A word
+    counts as a misspelled number when it's 5+ letters, starts like the number, and is spelled close."""
+    from difflib import SequenceMatcher
+
+    out = set()
+    for w in words:
+        if w in NUMBER_WORDS:
+            out.add(w)
+        elif w in ORDINALS:
+            out.add(ORDINALS[w])
+        elif len(w) >= 5 and w not in NOT_NUMBERS:
+            near = [(SequenceMatcher(a=w, b=n).ratio(), n) for n in _NUMBER_SPELLINGS if n[:2] == w[:2]]
+            if near and max(near)[0] >= MISSPELLED_NUMBER:
+                best = max(near)[1]
+                out.add(ORDINALS.get(best, best))
+    return out
+
+
+LIST_SOUND_KEY = 0.8        # ...or this close by _sound_key: "keen wa" -> quinoa, "raise you may" -> résumé
+
+
+def _fold(text: str) -> str:
+    """Without accents: "résumé" -> "resume" (normalize_words would split it at each accent)."""
+    import unicodedata
+
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+
+
+def _sound_key(text: str) -> str:
+    """A rough English sound key: qu/ck/hard c as k, soft c as s, ph as f, vowels and h/w/y dropped, doubles
+    merged ("quinoa" and "keen wa" are both "kn"; "precious" and "pressure" "prs" / "prsr"). Rough on purpose;
+    only compared with words that were replaced."""
+    s = re.sub(r"[^a-z]", "", _fold(text).lower())
+    for a, b in (("qu", "k"), ("ph", "f"), ("ck", "k")):
+        s = s.replace(a, b)
+    s = re.sub(r"c(?=[eiy])", "s", s)
+    for a, b in (("c", "k"), ("x", "ks"), ("z", "s")):
+        s = s.replace(a, b)
+    return re.sub(r"(.)\1+", r"\1", re.sub(r"[aeiouyhw]", "", s))
+
+
+def _list_words_added(original: str, clean: str, terms: list[str]) -> list[str]:
+    """Terms from the user's word list that are in the clean text, weren't said, and don't sound like the heard
+    words they replaced (one to four in a row, all gone from the clean text)."""
+    from difflib import SequenceMatcher
+
+    orig_w, clean_w = normalize_words(_fold(original)), normalize_words(_fold(clean))
+    clean_set, orig_set = {re.sub(r"'s$", "", w) for w in clean_w}, set(orig_w)
+    gone = [w not in clean_set for w in orig_w]
+    replaced = ["".join(orig_w[i:i + k]) for k in (1, 2, 3, 4) for i in range(len(orig_w) - k + 1)
+                if all(gone[i:i + k])]
+    added = []
+    for term in terms:
+        tw = [w for w in normalize_words(_fold(term)) if w not in TITLES]   # "Dr. Okafor": only Okafor must match
+        new = [w for w in tw if w not in orig_set]                           # "power wheelchair": only wheelchair
+        if not tw or not new or not all(w in clean_set for w in tw):
+            continue
+        target = "".join(new)
+        key = _sound_key(target)
+
+        def sounds_like(s: str) -> bool:
+            if SequenceMatcher(a=target, b=s).ratio() >= LIST_SOUND_ALIKE:
+                return True
+            other = _sound_key(s)       # a one-letter key must match exactly: "Coa" -> Khoa (k), not Theo -> Leo
+            return bool(key) and (key == other if len(key) < 2 else
+                                  SequenceMatcher(a=key, b=other).ratio() >= LIST_SOUND_KEY)
+
+        if not any(sounds_like(s) for s in replaced):
+            added.append(" ".join(tw))
+    return added
 
 
 def _stutter(name: str) -> bool:
@@ -318,7 +413,9 @@ def _stutter(name: str) -> bool:
 def check_cleanup(original: str, clean: str, words: list[str] = (), context: str = "") -> str | None:
     """Why the trained model's text must not be used, or None if it's safe to show. `words` is the user's word
     list: a name or term on it isn't invented, and may replace a name the recognizer got wrong. `context`, what
-    was typed earlier in this dictation, counts the same way ("Dr. Alvarez" typed before)."""
+    was typed earlier in this dictation, counts the same way ("Dr. Alvarez" typed before). A list word must also
+    sound like something heard; what was typed earlier needn't."""
+    terms = list(words)
     words = [*words, context] if context else list(words)
     if not clean or not clean.strip():
         return "empty"
@@ -340,9 +437,10 @@ def check_cleanup(original: str, clean: str, words: list[str] = (), context: str
         return f"content dropped (kept {kept:.0%})"
     listed = {w for x in words for w in normalize_words(x)}
     heard = set(orig_w) | {re.sub(r"'s$", "", w) for w in orig_w} | listed
-    orig_n, clean_n = {w for w in orig_w if w in NUMBER_WORDS}, {w for w in clean_w if w in NUMBER_WORDS}
-    if clean_n - heard:
-        return "number added: " + " ".join(sorted(clean_n - heard))
+    orig_n, clean_n = _number_stems(orig_w), _number_stems(clean_w)      # "fifteend" / "15th": fifteen
+    new_n = clean_n - orig_n - _number_stems(list(listed))
+    if new_n:
+        return "number added: " + " ".join(sorted(new_n))
     if orig_n - clean_n and not changed_mind:
         return "number missing: " + " ".join(sorted(orig_n - clean_n))
     orig_neg, clean_neg = _negation_kinds(orig_w), _negation_kinds(clean_w)
@@ -350,6 +448,9 @@ def check_cleanup(original: str, clean: str, words: list[str] = (), context: str
         return "negation added: " + " ".join(sorted(clean_neg - orig_neg))
     if orig_neg - clean_neg and not changed_mind:
         return "negation missing: " + " ".join(sorted(orig_neg - clean_neg))
+    from_nowhere = _list_words_added(original, clean, terms)
+    if from_nowhere:
+        return "word-list word added: " + ", ".join(from_nowhere)
     invented = sorted(n for n in _names(clean) - TITLES if n not in heard and not _sounds_heard(n, orig_w))
     if invented:
         return "name added: " + " ".join(invented)

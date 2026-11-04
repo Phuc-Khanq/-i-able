@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from engine.voice import cleanup_model
+from engine.voice import cleanup_model, rewrite
 from engine.voice.cleanup_model import Answer, CleanupModel, LlamaServer, build_prompt, chat_text, parse_answer
 from engine.voice.rewrite import Rewriter, check_cleanup
 
@@ -252,6 +252,51 @@ class TestCleanupGuard(unittest.TestCase):
     def test_numbers(self):
         self.assertIn("number added", check_cleanup("meet at to o'clock", "Meet at two o'clock."))
         self.assertIn("number missing", check_cleanup("we need six chairs", "We need chairs."))
+
+    def test_dates_and_misspelled_numbers(self):
+        # an ordinal is a number: "the fifteenth" -> "the end" loses it, spelled right or not (GPU test, B1232)
+        self.assertIn("number missing", check_cleanup("the deadline is the fifteenth of March",
+                                                      "The deadline is the end of March."))
+        self.assertIn("number missing", check_cleanup("the grant deadline is the fifteend of march",
+                                                      "The grant deadline is the end of March."))
+        self.assertIn("number added", check_cleanup("meet me on the fifth", "Meet me on the sixth."))
+        # a misspelled number is still the number it was meant to be
+        self.assertIsNone(check_cleanup("the grant deadline is the fifteend of march",
+                                        "The grant deadline is the fifteenth of March."))
+        self.assertIsNone(check_cleanup("we raised five thowsand dollers for the walk",
+                                        "We raised five thousand dollars for the walk."))
+        self.assertIsNone(check_cleanup("the party is on the 15th", "The party is on the fifteenth."))
+        self.assertIsNone(check_cleanup("we need fourty chairs", "We need forty chairs."))
+
+    def test_words_close_to_numbers_are_not_numbers(self):
+        self.assertEqual(rewrite._number_stems("there these then tent tree thirsty forth seconds".split()), set())
+        self.assertEqual(rewrite._number_stems(["fifteend", "thowsand", "fifteenth", "fourty"]),
+                         {"fifteen", "thousand", "forty"})
+        self.assertIsNone(check_cleanup("give me a second to find it", "Give me a moment to find it."))
+
+    def test_a_word_list_word_must_sound_like_what_was_heard(self):
+        words = ["Dr. Okafor", "sertraline"]
+        heard = "please let doctor oh car for know the new dose makes me dizzy"
+        self.assertIsNone(check_cleanup(heard, "Please let Dr. Okafor know the new dose makes me dizzy.", words))
+        self.assertIn("word-list word added: sertraline", check_cleanup(
+            heard, "Please let Dr. Okafor know the new dose of sertraline makes me dizzy.", words))
+        self.assertIsNone(check_cleanup("can I switch the sir tra lean to the evening",
+                                        "Can I switch the sertraline to the evening?", words))
+        self.assertIsNone(check_cleanup("I need my power wheel chair charged", "I need my power wheelchair charged.",
+                                        ["power wheelchair"]))
+        self.assertIn("word-list word added", check_cleanup(
+            "the s- score server needs a new moderator", "The Minecraft speedrun server needs a new moderator.",
+            ["Minecraft", "speedrun", "Discord"]))
+        # sounds alike though spelled apart (big1 test B1529, B0332)
+        self.assertIsNone(check_cleanup("Rinse the kin wa before you cook it", "Rinse the quinoa before you cook it.",
+                                        ["quinoa", "marinade"]))
+        self.assertIsNone(check_cleanup("I've attached my raise you may", "I've attached my résumé.", ["résumé"]))
+        self.assertIsNone(check_cleanup("Tell Coa I will be late", "Tell Khoa I will be late.", ["Khoa"]))   # dev M10
+        # a different name from the list in place of one that was heard (B0217)
+        self.assertIn("word-list word added: leo", check_cleanup("Ask Theo if the store is open",
+                                                                 "Ask Leo if the store is open.", ["Leo", "Theo"]))
+        # what was typed earlier is evidence too, and isn't held to sounding alike
+        self.assertIsNone(check_cleanup("and tell her thanks", "And tell Priya thanks.", context="Hi Priya,"))
 
     def test_negations(self):
         self.assertIn("negation added", check_cleanup("I can come tonight", "I can't come tonight."))

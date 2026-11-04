@@ -186,6 +186,14 @@ The real app backend on the 5080, through the Rewriter: p50/p90 280/309 ms, 4.8 
 Evidence: `eval/dictation_cleanup/reviews/2026-11-03_big1_vs_full1.md`, `..._dev_big1_score.md`, `docs/plans/2026-11-03_cleanup_app_integration.md` ("Measured on the reference machine"); run folders `runs/2026-11-03_big1-*`.
 Decided by: measured by Claude in the run Khang approved; switching the app's default model file is Khang's call (Proposed, below).
 
+**2026-11-03. The clean-up guard: list words must sound like what they replace, and dates and misspelled numbers count as numbers.**
+Built from the proposal below (it replaces that item). In `check_cleanup` (`engine/voice/rewrite.py`):
+- A word from the user's word list that wasn't said must sound like the heard words it replaced (1 to 4 in a row, all gone from the clean text): spelled close (0.6), or close by a rough sound key (0.8; qu/hard c as k, soft c as s, vowels dropped: "keen wa" -> quinoa, "raise you may" -> résumé, "precious" -> pressure, "Coa" -> Khoa). Otherwise "word-list word added". Before, a list word always passed. What was typed earlier still counts without sounding alike.
+- Ordinals are numbers ("15th" / "fifteenth" is fifteen; "second" isn't, it's mostly time), and a misspelled number word is the number ("thowsand", "fifteend", "fourty": 5+ letters, same first two letters, 0.85 close; "there", "thirsty", "forth" aren't).
+Measured on the saved answers (no new model runs): big1's 2,500 go from 12 blocks to 18. Newly caught: 3 real mistakes ("fifteend of March" -> "end of March"; "deduction" and "invoice" from the list in place of W-2 and deliverables). Newly blocked good answers: 4, all a number nobody said ("the tend" -> "the tenth" 3 times, "dirtieth" -> "thirtieth"), the same rule as "to o'clock" -> "two o'clock". No longer blocked: "five thowsand dollers". full1's 2,500 go from 13 to 22: 7 more list words added or swapped in (barbecue, consignment, memoir, colonoscopy, Minecraft, Leo for Theo, Beth for Bess), the same 3 date fixes lost. Dev unchanged (big1 2 blocks, full1 3). The GPU test's "of sertraline" is blocked. Tests: `tests/test_cleanup_model.py` (1,071 in all pass).
+Known gap: letters spelled out ("double you two" -> W-2) don't sound alike by the key and stay blocked, as before.
+Decided by: Khang (go-ahead to fix), built and measured by Claude.
+
 ---
 
 ## Proposed, not yet agreed
