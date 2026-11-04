@@ -194,6 +194,16 @@ Measured on the saved answers (no new model runs): big1's 2,500 go from 12 block
 Known gap: letters spelled out ("double you two" -> W-2) don't sound alike by the key and stay blocked, as before.
 Decided by: Khang (go-ahead to fix), built and measured by Claude.
 
+**2026-11-04. big2 (twice the LoRA rank, more data, 3 epochs) does not beat big1; big1 stays the candidate.**
+big2: LoRA rank 32 / alpha 64 on Qwen3.5-4B (big1: 16 / 32, every layer in both), 11,400 examples (careful noise, targeted examples for big1's misses, 16 new field banks, test-side terms filtered out), 3 epochs, 344.1 min on the 5080 (peak 10.19 GB). Scored as the app runs it (llama.cpp Q8_0, greedy, 5080) on the unchanged big1_test.csv:
+- Automatic, 2,500: big1 2,441; big2 epoch 1 2,362, epoch 2 2,409, final 2,411.
+- Clean sentences changed (of 378): big1 4; big2 29, 15, 14 (it adds "the", "please", "to"; once "building" -> "billing").
+- The same 150, full pass by Khang's rule (Claude): big1 141, big2 final 139.
+- Dev automatic: big1 65; big2 64, 62, 62. Latency the same (p50 about 289 ms).
+Why: big2's data drops every test-side term, which explains about 9 of the 30 cases (on the 2,307 cases where neither run had the advantage, big1 still wins 2,281 to 2,260); the over-editing and worse broken questions are a real step back, cause unmeasured (rank, length or the new data). Lesson: on this test set more capacity and more generated data no longer help; the next gain has to be measured on the human-written hidden set.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-04_big2_vs_big1.md`; run folders `runs/2026-11-04_big2-*`; `checkpoints/cleanup/big2/results.json`.
+Decided by: measured by Claude in the overnight run Khang approved ("Yes, start prep"); the app default stays Khang's call (Proposed, below, still names big1).
+
 ---
 
 ## Proposed, not yet agreed

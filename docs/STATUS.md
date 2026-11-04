@@ -4,12 +4,13 @@ Last updated: 2026-11-03 12:25 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## Now
 
-- **Dictation clean-up: our own trained model.** full1, a LoRA adapter on Qwen3.5-4B (Apache 2.0) trained on Claude-written examples, is the candidate. Dev full pass 62/67 by Khang's rule, but dev is tuned on, so a fresh hidden test is next. In llama.cpp it answers in 0.33 s median (Q8_0), under the 1.5 s quick clean-up budget.
+- **Dictation clean-up: our own trained model.** big1, a LoRA adapter on Qwen3.5-4B (Apache 2.0) trained on Claude-written examples, is the candidate (replaced full1 on 2026-11-03; big2 didn't beat it on 2026-11-04). Dev full pass 63/67 by Khang's rule, but dev is tuned on, so a fresh hidden test is next. In llama.cpp it answers in 0.29 s median (Q8_0), under the 1.5 s quick clean-up budget.
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
 ## Done recently
 
+- 2026-11-04: overnight run big2 (LoRA rank 32, 11,400 examples, 3 epochs, 344 min, 5080) loses to big1 on every measure: big1 test automatic 2,411 vs 2,441, clean sentences changed 14 vs 4, the same 150 by Khang's rule 139 vs 141, dev automatic 62 vs 65; no epoch is better. About 9 of the 30 cases come from big2 never seeing the test's terms; the rest is real (it adds small words, breaks questions). `eval/dictation_cleanup/reviews/2026-11-04_big2_vs_big1.md`.
 - 2026-11-03: full1 runs in llama.cpp (MIT, build b11960), 5080, dev: Q8_0 p50/p90/p99 328/378/412 ms (about 5.1 GB), Q4_K_M 264/292/332 (about 3.3 GB), bf16 488/565/603. With greedy decoding it gives the same answers as transformers on all 67 cases. Full pass by Khang's rule 59 to 62 across runs (sampling luck). `engine/voice/cleanup_train/export.py` makes the GGUF files; the eval runs them with `--backend llamacpp`.
 - 2026-11-03: first trained adapter full1: 1,088 examples, 32.7 min on the 5080 (peak 9.5 GB). Dev: automatic 64/67, silent guess 1/10, over-edit 0/10, 0 invented, human full pass 62/67 (93%); p50 1770 ms in transformers.
 - 2026-11-02: training pipeline `engine/voice/cleanup_train/`: Claude-written sentences, speech noise (stutters, fillers, restarts, misspellings), a leak check against the test set, LoRA trainer (peft). Pilot: 300 examples in 9.4 min, full pass 59/67. Training works on Windows with the slow reference kernels; WSL2 wasn't needed.
@@ -29,11 +30,7 @@ Last updated: 2026-11-03 12:25 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## In progress
 
-- 2026-11-03 night: overnight run big2 (Khang: "Yes, start prep"). LoRA rank 32 / alpha 64 (big1: 16 / 32; every
-  layer was already trained), 12,000 examples, 3 epochs, each epoch scored on the unchanged big1_test (2,500) and
-  dev. Data: `bigset.py --more-from data/cleanup_train/big1_test.csv` (careful noise that keeps a question's first
-  word, targeted examples for big1's misses, 16 new field banks in `fields_big2.py`); 0 test sentences, near copies
-  or test terms in it. Then the hidden test phrases.
+- Nothing running. big2 is done (below); big1 stays the clean-up candidate.
 
 ## Next
 
