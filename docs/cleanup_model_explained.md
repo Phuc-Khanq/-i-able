@@ -82,6 +82,13 @@ dev and both new-data losses, and it stops writing spoken numbers as digits. It 
 data. So the bigger adapter wasn't "more room to learn". A guess, not tested: with alpha at twice the rank, rank 32 moves
 the model further per step, like a higher learning rate. Details: `eval/dictation_cleanup/reviews/2026-11-05_big3s16.md`.
 
+## What big3s16lr showed (2026-11-05)
+
+Half the learning rate (1e-4) learns **faster**: at step 500, all three losses are lower than at 2e-4, the training loss
+included. The old steps overshot. It's the first run to beat big1 (test 2,446 vs 2,441), by a small margin. Its best
+point is the end of epoch 1 (test-case loss 0.0187, the lowest measured). In epoch 2, the new-data losses rise a little
+while the training loss keeps falling. Details: `eval/dictation_cleanup/reviews/2026-11-05_big3s16lr.md`.
+
 ## Knobs we can turn, and what we know about each
 
 | Knob | Today | What we know |
@@ -92,7 +99,7 @@ the model further per step, like a higher learning rate. Details: `eval/dictatio
 | Rank r | 16 | 32 costs: on the same data, rank 16 beats rank 32 on every measure, also on both new-data losses (big3s16 vs big3s, 2026-11-05). Use 16. |
 | Layers trained | all 32, every linear layer | Nothing left to add. |
 | Epochs and steps | 2 | Test-case loss stops improving after about 500 steps (big3); big2's rose every epoch. |
-| Learning rate | 2e-4, cosine | Not tested. A lower rate (1e-4) is a cheap next test. |
+| Learning rate | 1e-4, cosine | 1e-4 beats 2e-4 (big3s16lr vs big3s16): it learns faster, and it's the first run to beat big1. Its best point is the end of epoch 1. 5e-5: untested. |
 | LoRA dropout | 0.05 | Not tested. More dropout is a standard brake on memorizing. |
 | Loss weighting | every answer token equal | Not tested. Could weigh the tokens that matter (a fixed word, the "uncertain" flag) more. |
 | The model's own confidence | not used | llama.cpp can report each token's probability; a low one on a changed word could set "unsure" by itself. Likely the biggest step for reliability, and it needs no training. |

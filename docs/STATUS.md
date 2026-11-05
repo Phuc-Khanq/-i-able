@@ -1,16 +1,17 @@
 # Status
 
-Last updated: 2026-11-05 12:45 (big3s16 results). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-05 17:20 (big3s16lr results). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
 - **Dictation clean-up: our own trained model.** big1, a LoRA adapter on Qwen3.5-4B (Apache 2.0) trained on Claude-written examples, is the candidate and the app's model file (`rewrite_gguf`, big1 Q8_0). It runs in llama-server behind the Rewriter (0.28 s median on the 5080), but only with `rewrite_backend: "llamacpp"`; the default backend is still the old Qwen2.5-3B. Dev full pass 63/67 by Khang's rule; dev is tuned on, so the hidden test decides.
-- **Training experiments:** rank 32 was costing us. big3s16 (big3s at rank 16, nothing else changed) beats big3s on every measure and ties big1 on the fair cases, so rank 16 from now on. big2, big3s and big3 were all rank 32; "three times the data made it worse" is untested at rank 16. The model still overfits to our data generator: loss on new data stops improving while training loss keeps falling. More data must be new sentences from new sources (Khang's goal: 100,000 examples). Explainer: `docs/cleanup_model_explained.md`.
+- **Training experiments:** the settings were the problem. Rank 16 beats rank 32 (big3s16 vs big3s), and half the learning rate (1e-4) beats 2e-4: big3s16lr is the first run to beat big1 (test 2,446 vs 2,441, fair cases 2,281 vs 2,275), by a small margin. Proposed: big3s16lr epoch 1 as the new candidate (needs Khang's OK). "Three times the data made it worse" was measured at the old settings only. The model still overfits to our data generator: loss on new data stops improving while training loss keeps falling. More data must be new sentences from new sources (Khang's goal: 100,000 examples). Explainer: `docs/cleanup_model_explained.md`.
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
 ## Done recently
 
+- 2026-11-05 afternoon: big3s16lr (big3s16 with learning rate 1e-4, 150 min) is the first run to beat big1: test epoch 1 2,446 / final 2,444 vs 2,441, fair 2,301 cases 2,281 vs 2,275 (10 wins, 4 losses), terms no run trained on 89 vs 84, invented flagged 7 vs 8, clean changed 4 and dev 65 (equal). Lowest test-case loss measured, 0.0187 at the end of epoch 1, rising slightly in epoch 2 (0.0199). At step 500 all losses beat 2e-4's, so the old steps overshot. `eval/dictation_cleanup/reviews/2026-11-05_big3s16lr.md`.
 - 2026-11-05 midday: big3s16 (big3s's data at rank 16 instead of 32, 182 min) beats big3s: test 2,432 vs 2,418, fair 2,301 cases 2,277 vs 2,262 (17 wins, 2 losses), clean changed 4 vs 7, dev 65 vs 64, digits for spoken numbers 0 vs 4; final loss on held-back sentences 0.0133 vs 0.0170, on test cases 0.0200 vs 0.0208. Ties big1 on the fair cases (2,277 vs 2,275), clean (4) and dev (65), but makes more confident wrong guesses on medical words (HIV, AFO, PRP). `eval/dictation_cleanup/reviews/2026-11-05_big3s16.md`.
 - 2026-11-05: big3 (24,000 examples, rank 32, 2 epochs, 428 min) loses to big3s, its own 8,000-example part: test 2,395 vs 2,418, fair 2,301 cases 2,250 vs 2,262, clean changed 15 vs 7, dev 63 vs 64 (big1: 2,441, 2,275, 4, 65). Held-back sentences 0.0067 (big3s 0.0170), but test cases flat after step 500 (0.0279 at the end; big3s 0.0208, big1 0.0190). big2's test-case loss rises every epoch (0.0324, 0.0339, 0.0361). Cause of the clean-sentence changes: `drop_small_words` in broken examples (43% of them add "the"). `eval/dictation_cleanup/reviews/2026-11-05_big3.md`.
 - 2026-11-04 evening: big3s (8,000 of big3's examples, rank 32, 2 epochs, 175 min) doesn't beat big1: test 2,418 vs 2,441, fair 2,301 cases 2,262 vs 2,275, clean changed 7 vs 4, dev 64 vs 65. Loss on new sentences never rises but ends 19x the training loss (0.0170 vs 0.0009); 93% of its fall is in the first 500 of 1,898 steps. `eval/dictation_cleanup/reviews/2026-11-04_big3s.md`.
@@ -38,7 +39,7 @@ Last updated: 2026-11-05 12:45 (big3s16 results). Session-by-session record: `do
 
 ## Next
 
-1. Training tests at rank 16, one change per run, judged by the test-case loss and the fair split: learning rate 1e-4 on big3s's data (about 3 h); big3's 24,000 at rank 16 (about 7 h, overnight: does more data help once the rank is right?); the "add the" fix in the data (less urgent: no "the" added to clean sentences at rank 16). Then choose big1 or big3s16 before the hidden test.
+1. Training tests at rank 16 and 1e-4, one change per run, judged by the test-case loss and the fair split: big3's 24,000 (about 8 h, overnight: does more data help with the right settings?); a true one-epoch run; learning rate 5e-5. Then Khang decides on big3s16lr epoch 1 as the candidate, before the hidden test.
 2. Hidden test: Khang or Hung writes about 35 new phrases (`messy → meant`). Claude turns them into cases and runs the candidate once as it ships (llama.cpp Q8_0, greedy).
 3. Try big1 in the demo with camera and mic (`"rewrite_backend": "llamacpp"` in config.local.json, preflight, run_demo); then decide whether llamacpp becomes the default.
 4. A plan for many more different sentences (toward 100,000 examples): source, licence, cost.
@@ -57,7 +58,7 @@ Last updated: 2026-11-05 12:45 (big3s16 results). Session-by-session record: `do
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: c4ab513 (big3s review), 6c94b8b (big3 review) and the big3s16 review.
+- Not pushed: c4ab513 (big3s review), 6c94b8b (big3 review), ed90cef (big3s16 review) and the big3s16lr review.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
 

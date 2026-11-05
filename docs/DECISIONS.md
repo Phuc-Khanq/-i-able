@@ -231,9 +231,15 @@ Evidence: `eval/dictation_cleanup/reviews/2026-11-05_big3.md`. No change to the 
 big3s16 is big3s with only the rank changed (16 / alpha 32 instead of 32 / 64; same data, seed, split, order and schedule). It beats big3s on every measure: test 2,432 vs 2,418, the fair 2,301 cases 2,277 vs 2,262 (17 wins, 2 losses), clean sentences changed 4 vs 7, dev 65 vs 64, spoken numbers written as digits 0 vs 4, final loss on held-back sentences 0.0133 vs 0.0170 and on test cases 0.0200 vs 0.0208. Against big1 it ties on the fair 2,301 (2,277 vs 2,275; 8 wins, 6 losses), clean sentences (4) and dev (65), and big1 leads on the whole test (2,441) through terms only it trained on. big1 stays the app's model because big3s16 makes more confident wrong guesses on medical words ("hard worm" -> HIV, AFO -> ankle and HFO, "pred knee zone" -> PRP). The trainer's default is already 16; the rank 32 runs (big2, big3s, big3) passed `--rank 32`. "Three times the data made it worse" was measured at rank 32 only.
 Evidence: `eval/dictation_cleanup/reviews/2026-11-05_big3s16.md`. No change to the app. Recorded by Claude.
 
+**2026-11-05. Clean-up training uses learning rate 1e-4 (was 2e-4) with rank 16; the app's model is unchanged.**
+big3s16lr is big3s16 with only the learning rate halved. It is the first run to beat big1 on the test: epoch 1 2,446 and final 2,444 vs 2,441; the fair 2,301 cases 2,281 vs 2,275 (epoch 1 wins 10, loses 4); the 94 cases with terms no run trained on 89 vs 84; invented flagged 7 vs 8; clean sentences changed 4 and dev 65, both equal. It trails big1 only on the 199 cases with terms big1 trained on (163 to 165 vs 166). The leads are small (a 9-to-3 split happens by chance about 15% of the time). Loss checks: at step 500 all three losses are lower than at 2e-4, the training loss included, so the old steps overshot. The test-case loss is lowest at the end of epoch 1 (0.0187 at step 1,000, the lowest of any adapter measured; big1 0.0190) and rises slightly in epoch 2 (0.0199). big3s16's medical guesses HIV, yoga class, HFO and cardio are fixed; "foam" for AFO and "physical therapy" for prednisone remain. The trainer's `--lr` default (2e-4) is not changed yet: runs pass `--lr 1e-4`.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-05_big3s16lr.md`. No change to the app. Recorded by Claude.
+
 ---
 
 ## Proposed, not yet agreed
+
+- (2026-11-05) big3s16lr epoch 1 (rank 16, learning rate 1e-4, Q8_0) replaces big1 as the clean-up candidate and the app's model file, and is the one model run on the hidden test. Evidence: `eval/dictation_cleanup/reviews/2026-11-05_big3s16lr.md`. Proposed by Claude; needs Khang's OK.
 
 - Clean-up levels the user chooses: Exact (as said), Tidy (fix grammar), Full help (work out what was meant).
 - The clean-up gets Whisper's top candidates, the last text typed, the app and the user's word list as input.
