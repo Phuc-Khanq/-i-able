@@ -12,7 +12,7 @@ Khang's notes for this session (may be empty): $ARGUMENTS
 
 2. Add a new entry at the TOP of docs/SESSION_LOG.md (create the file with a one-line header if it's missing). Use exactly this shape, write "none" for empty lines, keep it under 35 lines, plain language:
 
-## YYYY-MM-DD HH:MM: <one-line title of what this session was about>
+## YYYY-MM-DD HH:MM [<chat name>]: <one-line title of what this session was about>
 Branch: <branch> · Commits: <short hash + message, or none> · Uncommitted: <files, or none>
 **Done:** what was finished
 **Measured:** number, what it measures, how, on which machine (only numbers actually measured this session)
@@ -24,7 +24,7 @@ Branch: <branch> · Commits: <short hash + message, or none> · Uncommitted: <fi
 **For Cowork:** questions to research, decisions that need the team, docs to write
 **Notes from Khang:** the notes above, or none
 
-3. Update docs/STATUS.md to match reality: the date, Now, In progress, Next, Blockers and Uncommitted work. Move finished items to "Done recently". Move "Done" items older than two weeks to "Earlier" as one dated line each. Keep it under about 80 lines.
+3. Update docs/STATUS.md to match reality: the date, Now, In progress, Next, Blockers and Uncommitted work. Move finished items to "Done recently". Move "Done" items older than two weeks to "Earlier" as one dated line each. Keep it under about 80 lines. If another Code chat is active ("Code chats now"), edit only your own lines and your own chat's line there, and leave the other chat's lines as they are.
 
 4. Add a dated entry to docs/DECISIONS.md for every decision made this session. Never edit old entries. If a "Proposed, not yet agreed" item was agreed or dropped, add an entry saying so.
 
@@ -32,6 +32,6 @@ Branch: <branch> · Commits: <short hash + message, or none> · Uncommitted: <fi
 
 6. Check that these files contain no secrets, keys, tokens or personal details of users or testers, and that every number under "Measured" was measured this session.
 
-7. Commit only these docs files, using `git add -f` (.git/info/exclude hides .md files), with the message "docs: session wrap-up YYYY-MM-DD". If the branch is main, don't commit: say so instead. Don't push.
+7. Commit only these docs files, using `git add -f` (.git/info/exclude hides .md files), with the message "docs: session wrap-up YYYY-MM-DD". If the branch is main, don't commit: say so instead. Don't push. If the other chat has uncommitted edits in these same docs, they go into this commit too: say so in the reply, and message the other chat.
 
 8. Reply with the new SESSION_LOG entry, then one line: "Ready for Cowork."

@@ -9,6 +9,12 @@ Last updated: 2026-11-05 18:25 (wrap-up; night chain running). Session-by-sessio
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
+## Code chats now (rules: CLAUDE.md, "Two Code chats at once")
+
+- **Clean-up model chat:** trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`. GPU: the night chain until about 07:00 on 11-06.
+- **Dictation chat** (new, 2026-11-05): adds its own line at `/start` (job, files it edits, GPU use).
+- Shared, message first: `engine/voice/rewrite.py` (the trained model needs its exact prompt), `engine/voice/voice_check.py`, `engine/config.py`, the contracts. The night chain imports these and `eval/` at every step: no changes to them before it ends. Both chats work on `voice-cleanup-app`.
+
 ## Done recently
 
 - 2026-11-05 afternoon: big3s16lr (big3s16 with learning rate 1e-4, 150 min) is the first run to beat big1: test epoch 1 2,446 / final 2,444 vs 2,441, fair 2,301 cases 2,281 vs 2,275 (10 wins, 4 losses), terms no run trained on 89 vs 84, invented flagged 7 vs 8, clean changed 4 and dev 65 (equal). Lowest test-case loss measured, 0.0187 at the end of epoch 1, rising slightly in epoch 2 (0.0199). At step 500 all losses beat 2e-4's, so the old steps overshot. `eval/dictation_cleanup/reviews/2026-11-05_big3s16lr.md`.
@@ -58,7 +64,7 @@ Last updated: 2026-11-05 18:25 (wrap-up; night chain running). Session-by-sessio
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: c4ab513 (big3s review), 6c94b8b (big3 review), ed90cef (big3s16 review), 3b6750f (big3s16lr review) and the 2026-11-05 wrap-up.
+- Not pushed: the two-chat rules commit (2026-11-05 evening). Everything before it is on origin.
 - Disk: each training run keeps about 40 GB in `checkpoints/cleanup/<name>/`; its `merged*/` folders and bf16 GGUFs can be rebuilt with export.py and deleted.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
