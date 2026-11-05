@@ -227,6 +227,10 @@ Evidence: `eval/dictation_cleanup/reviews/2026-11-04_big3s.md`. No change to the
 big3 (24,000 examples, 5,752 different answers, rank 32, 2 epochs, 427.8 min) against big3s, a random 8,000 of the same data with the same recipe: test 2,395 vs 2,418, the fair 2,301 cases 2,250 vs 2,262, clean sentences changed 15 vs 7, dev 63 vs 64 (big1: 2,441, 2,275, 4, 65). Loss on held-back sentences of our own generator fell to 0.0067 (big3s 0.0170), but on 400 test cases it stopped improving at step 500 (0.0326) and ended at 0.0279 (big3s 0.0208, big1 0.0190). big2's test-case loss rose at every epoch (0.0324, 0.0339, 0.0361) while its training loss fell to 0.0006. 12 of big3's 15 clean-sentence changes only add "the", "a" or "please". The cause: broken examples delete small words with chance 0.6 (`noise.drop_small_words`), and 43% of them teach adding a "the".
 Evidence: `eval/dictation_cleanup/reviews/2026-11-05_big3.md`. No change to the app. Recorded by Claude.
 
+**2026-11-05. Clean-up training uses LoRA rank 16 from now on; big1 stays the app's model.**
+big3s16 is big3s with only the rank changed (16 / alpha 32 instead of 32 / 64; same data, seed, split, order and schedule). It beats big3s on every measure: test 2,432 vs 2,418, the fair 2,301 cases 2,277 vs 2,262 (17 wins, 2 losses), clean sentences changed 4 vs 7, dev 65 vs 64, spoken numbers written as digits 0 vs 4, final loss on held-back sentences 0.0133 vs 0.0170 and on test cases 0.0200 vs 0.0208. Against big1 it ties on the fair 2,301 (2,277 vs 2,275; 8 wins, 6 losses), clean sentences (4) and dev (65), and big1 leads on the whole test (2,441) through terms only it trained on. big1 stays the app's model because big3s16 makes more confident wrong guesses on medical words ("hard worm" -> HIV, AFO -> ankle and HFO, "pred knee zone" -> PRP). The trainer's default is already 16; the rank 32 runs (big2, big3s, big3) passed `--rank 32`. "Three times the data made it worse" was measured at rank 32 only.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-05_big3s16.md`. No change to the app. Recorded by Claude.
+
 ---
 
 ## Proposed, not yet agreed

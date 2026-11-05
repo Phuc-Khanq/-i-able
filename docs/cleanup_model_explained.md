@@ -75,6 +75,13 @@ three times the data does. Every 500 steps the trainer measures the loss on trai
   model learns to add "the" wherever one would fit, also to clean sentences ("for kids" -> "for the kids").
 - Details: `eval/dictation_cleanup/reviews/2026-11-04_big3s.md` and `2026-11-05_big3.md`.
 
+## What big3s16 showed (2026-11-05)
+
+big3s16 is big3s with only the rank changed, 16 instead of 32. Rank 16 wins on the test, the fair cases, clean sentences,
+dev and both new-data losses, and it stops writing spoken numbers as digits. It even ends lower on its own training
+data. So the bigger adapter wasn't "more room to learn". A guess, not tested: with alpha at twice the rank, rank 32 moves
+the model further per step, like a higher learning rate. Details: `eval/dictation_cleanup/reviews/2026-11-05_big3s16.md`.
+
 ## Knobs we can turn, and what we know about each
 
 | Knob | Today | What we know |
@@ -82,7 +89,7 @@ three times the data does. Every 500 steps the trainer measures the loss on trai
 | Data: different sentences | 5,752 (big3) | The real limit (above). Growing it needs new sentences from new sources, not more template fills or noise passes. |
 | Data: examples | 24,000 (big3) | Three times the same data hurt (big3 vs big3s). |
 | Data: how noise is made | small words dropped with chance 0.6 in broken examples | Teaches adding "the" to clean sentences. Not yet changed. |
-| Rank r | 16 (big1), 32 | 32 gave no gain (big2, big3s). Whether it costs anything: untested. |
+| Rank r | 16 | 32 costs: on the same data, rank 16 beats rank 32 on every measure, also on both new-data losses (big3s16 vs big3s, 2026-11-05). Use 16. |
 | Layers trained | all 32, every linear layer | Nothing left to add. |
 | Epochs and steps | 2 | Test-case loss stops improving after about 500 steps (big3); big2's rose every epoch. |
 | Learning rate | 2e-4, cosine | Not tested. A lower rate (1e-4) is a cheap next test. |
