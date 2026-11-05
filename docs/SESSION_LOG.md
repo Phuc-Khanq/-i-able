@@ -1,5 +1,29 @@
 # Session log (newest first)
 
+## 2026-11-05 18:25: Clean-up training: why the newer runs lost (rank 32, learning rate); first run to beat big1
+Branch: voice-cleanup-app · Commits: c4ab513 big3s review; 6c94b8b big3 review; ed90cef big3s16 review; 3b6750f big3s16lr review; plus this wrap-up. None pushed · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:**
+- Four training runs, each one change from an earlier one, each with loss checks every 500 steps on held-back whole sentences and on 400 test cases never trained on: big3s (8,000 of big3's data, rank 32), big3 (all 24,000, rank 32), big3s16 (big3s at rank 16), big3s16lr (big3s16 at learning rate 1e-4). Reviews: `eval/dictation_cleanup/reviews/2026-11-04_big3s.md`, `2026-11-05_big3.md`, `2026-11-05_big3s16.md`, `2026-11-05_big3s16lr.md`.
+- Found why clean sentences get a "the" added: broken examples delete small words (`noise.drop_small_words`, chance 0.6) and the answer puts them back. It shows at rank 32, hardly at rank 16.
+- Explainer updated: `docs/cleanup_model_explained.md`.
+**Measured:** Khang's PC, RTX 5080, llama.cpp b11960 Q8_0, greedy, automatic scoring (not hand-checked). Test = big1_test.csv (2,500); fair = the 2,301 without a term only big1 trained on; loss = dropout off, at the end:
+- big1 (reference; test and dev scored on 11-03, fair split and loss measured now): test 2,441, fair 2,275, clean changed 4 of 378, dev 65 of 67, test-case loss 0.0190.
+- big3s (rank 32, 2e-4, 175 min): 2,418, 2,262, 7, 64; test-case loss 0.0208.
+- big3 (rank 32, 3x the data, 428 min): 2,395, 2,250, 15, 63; held-back sentences 0.0067, but test cases flat after step 500 (0.0279).
+- big3s16 (rank 16, 182 min): 2,432, 2,277, 4, 65; beats big3s 17 to 2 on the fair cases; held-back 0.0133 (big3s 0.0170).
+- big3s16lr (rank 16, 1e-4, 150 min): epoch 1 2,446, final 2,444; fair 2,281 (beats big1 10 to 4); terms no run trained on 89 of 94 (big1 84); invented flagged 7 (big1 8); clean 4; dev 65. Test-case loss 0.0187 at step 1,000 (lowest measured), 0.0199 at the end.
+- big2's test-case loss rose every epoch (0.0324, 0.0339, 0.0361): textbook overfitting.
+**Decisions:** big1 stays the app's model; rank 16 from now on; learning rate 1e-4 from now on (passed as `--lr 1e-4`; the trainer default is still 2e-4). Proposed, needs Khang: big3s16lr epoch 1 as the new candidate and app model file. All in DECISIONS.md.
+**Still running:** a night chain started 18:12, one run after another, each one change from big3s16lr: A big3lr (big3's 24,000, about 8 h), B big3s16lr1ep (one epoch, about 1.6 h), C big3s16lr5 (learning rate 5e-5, about 3 h). Expected done about 07:00 on 2026-11-06. A failed run is logged and the next one starts. Output: `checkpoints/cleanup/<name>/` (log.jsonl has the loss checks), scores in `eval/dictation_cleanup/runs/<date>_<name>-*`; the step log is in this session's scratchpad (`chain_night/steps.txt`).
+**Problems / blockers:** "three times the data made it worse" was measured at the old settings only; run A re-tests it. big3s16lr still makes confident wrong guesses on two medical words ("afo" -> foam, "pred knee zone" -> physical therapy), not marked unsure. Each run keeps about 40 GB on disk (merged weights and bf16 GGUFs can be rebuilt and deleted). Dev is tuned on and the holdout is spent: only the hidden set gives a fair number.
+**Next:**
+1. Read the night chain: does more data help at the new settings (A), is one epoch enough (B), is 5e-5 better (C).
+2. Khang picks the candidate; then the hidden test runs once on it.
+3. A plan for many more different sentences toward 100,000.
+**Khang must do by hand:** push the five commits; say yes or no to big3s16lr epoch 1 as the candidate; write the hidden test phrases; try the trained model in the demo with camera and mic.
+**For Cowork:** where many new, different sentences come from (now clearly the limit, not the settings), with licences; whether the guard should catch confident medical-word swaps, or the model's token probabilities should mark them unsure; the lawyer list (unchanged).
+**Notes from Khang:** none
+
 ## 2026-11-04 18:20: Clean-up model: big data set, the model in the app, big1/big2/big3 training, over- or underfitting
 Branch: voice-cleanup-app · Commits: 3425396 big data set from 42 field banks; 1bf636b eval --cases/--greedy; 11e9e1a hand check of full1 (150); 3546167 llama-server behind the Rewriter, own guard; 48abc22 docs; 138c806 context/app in, other readings out (contracts); ac2d522 docs; 69687d2 card lists other readings, "option two"; ef79f47 docs; fb1c578 setup/preflight know the backend; bf72e3a licence scan; f2b79c2 app runs without PyAV; f67d8b2 big1 beats full1; 212ca23 guard: list words, dates, misspelled numbers; b6f3e0a big2 data, rank flag; 5179e52 big2 doesn't beat big1; 8f683a3 app model file is big1; ca754de big3 data and loss checks. All pushed to origin except ca754de · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:**

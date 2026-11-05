@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-05 17:20 (big3s16lr results). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-05 18:25 (wrap-up; night chain running). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
@@ -35,11 +35,11 @@ Last updated: 2026-11-05 17:20 (big3s16lr results). Session-by-session record: `
 
 ## In progress
 
-- Nothing running.
+- Night chain, started 2026-11-05 18:12, expected done about 07:00 on 11-06. Each run is one change from big3s16lr (rank 16): big3lr (big3's 24,000, about 8 h), then big3s16lr1ep (one epoch), then big3s16lr5 (learning rate 5e-5). Output in `checkpoints/cleanup/<name>/` and `eval/dictation_cleanup/runs/`.
 
 ## Next
 
-1. Training tests at rank 16 and 1e-4, one change per run, judged by the test-case loss and the fair split: big3's 24,000 (about 8 h, overnight: does more data help with the right settings?); a true one-epoch run; learning rate 5e-5. Then Khang decides on big3s16lr epoch 1 as the candidate, before the hidden test.
+1. Read the night chain's results (judged by the test-case loss and the fair split): does more data help at the new settings, is one epoch enough, is 5e-5 better. Then Khang picks the candidate (big3s16lr epoch 1 is proposed), before the hidden test.
 2. Hidden test: Khang or Hung writes about 35 new phrases (`messy → meant`). Claude turns them into cases and runs the candidate once as it ships (llama.cpp Q8_0, greedy).
 3. Try big1 in the demo with camera and mic (`"rewrite_backend": "llamacpp"` in config.local.json, preflight, run_demo); then decide whether llamacpp becomes the default.
 4. A plan for many more different sentences (toward 100,000 examples): source, licence, cost.
@@ -58,7 +58,8 @@ Last updated: 2026-11-05 17:20 (big3s16lr results). Session-by-session record: `
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: c4ab513 (big3s review), 6c94b8b (big3 review), ed90cef (big3s16 review) and the big3s16lr review.
+- Not pushed: c4ab513 (big3s review), 6c94b8b (big3 review), ed90cef (big3s16 review), 3b6750f (big3s16lr review) and the 2026-11-05 wrap-up.
+- Disk: each training run keeps about 40 GB in `checkpoints/cleanup/<name>/`; its `merged*/` folders and bf16 GGUFs can be rebuilt with export.py and deleted.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
 
