@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-04 18:20 (wrap-up). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-04 21:55 (big3s results). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
@@ -11,6 +11,7 @@ Last updated: 2026-11-04 18:20 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## Done recently
 
+- 2026-11-04 evening: big3s (8,000 of big3's examples, rank 32, 2 epochs, 175 min) doesn't beat big1: test 2,418 vs 2,441, fair 2,301 cases 2,262 vs 2,275, clean changed 7 vs 4, dev 64 vs 65. Loss on new sentences never rises but ends 19x the training loss (0.0170 vs 0.0009); 93% of its fall is in the first 500 of 1,898 steps. `eval/dictation_cleanup/reviews/2026-11-04_big3s.md`.
 - 2026-11-04: trainer measures over/underfitting (`--held-back-by sentence`, `--watch`, `--check-every`); big3 data (24,000 examples, 5,752 different sentences; noisy two readings, casual requests). Training loss ends about 10x below held-back loss (big1 0.0011 vs 0.0094).
 - 2026-11-04: big2 (rank 32, 11,400 examples, 3 epochs, 344 min) loses to big1 on every measure: test automatic 2,411 vs 2,441, clean sentences changed 14 vs 4, the 150 by Khang's rule 139 vs 141, dev automatic 62 vs 65. `eval/dictation_cleanup/reviews/2026-11-04_big2_vs_big1.md`.
 - 2026-11-04: the app's model file is big1 Q8_0 (was full1).
@@ -31,12 +32,11 @@ Last updated: 2026-11-04 18:20 (wrap-up). Session-by-session record: `docs/SESSI
 
 ## In progress
 
-- big3s: 8,000 random examples of big3's data, rank 32, 2 epochs, loss checks every 500 steps. Started 2026-11-04 18:04, done about 21:35 with scoring. Output: `checkpoints/cleanup/big3s/`, runs `eval/dictation_cleanup/runs/2026-11-04_big3s-*`.
-- big3 (24,000 examples, same recipe, about 9.5 h): starts when Khang says he's going to sleep, not before. Then the loss check of big1's and big2's saved epochs.
+- big3 (24,000 examples, same recipe as big3s, about 9.5 h with scoring): starts when Khang says he's going to sleep, not before. Then the loss check of big1's and big2's saved epochs.
 
 ## Next
 
-1. big3s and big3 results: does more data help, and where does the held-back loss part from the training loss.
+1. big3 results: does three times the data help (big3 vs big3s, nothing else changed). Then a cheap daytime test: big3s at rank 16 (about 3 h), to see if rank 32 is what changes clean sentences.
 2. Hidden test: Khang or Hung writes about 35 new phrases (`messy → meant`). Claude turns them into cases and runs the candidate once as it ships (llama.cpp Q8_0, greedy).
 3. Try big1 in the demo with camera and mic (`"rewrite_backend": "llamacpp"` in config.local.json, preflight, run_demo); then decide whether llamacpp becomes the default.
 4. A plan for many more different sentences (toward 100,000 examples): source, licence, cost.
@@ -55,7 +55,7 @@ Last updated: 2026-11-04 18:20 (wrap-up). Session-by-session record: `docs/SESSI
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: ca754de (big3 data and loss checks) and the 2026-11-04 wrap-up.
+- Not pushed: the big3s review and its STATUS and DECISIONS lines.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
 

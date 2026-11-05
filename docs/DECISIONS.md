@@ -219,6 +219,10 @@ Decided by: Khang (double the data, understand the fit), built by Claude.
 Built on branch `voice-cleanup-app` from `docs/plans/2026-11-03_cleanup_app_integration.md`: step 1, llama-server behind the `Rewriter` (127.0.0.1, a random API key per run, Windows job object; commit 3546167); step 2, the trained model's own guard `check_cleanup` (entry above); step 3, `REWRITE_REQUEST` gains optional `context` and `app`, `REWRITE_RESULT` and `DICTATION_PREVIEW` gain optional `alternatives` and `uncertain`, and the website stores them (138c806); step 4, the card lists the other readings and "option two" picks one, the website panel has Option buttons (69687d2). This partly covers the proposal below ("the clean-up gets ... the last text typed, the app and the user's word list"); Whisper's other candidates are not sent yet.
 Decided by: Khang ("Yeah, let's proceed to the next steps" for step 3; "Yes, build it" on the card's look for step 4), built by Claude. Not yet tried with camera and mic.
 
+**2026-11-04. big3s doesn't beat big1; big1 stays the clean-up candidate.**
+big3s (8,000 random examples of big3's data, rank 32, 2 epochs, 175.4 min) on the 2,500-case test: 2,418 (epoch 1 2,424) against big1's 2,441; on the 2,301 cases with no term that only big1 trained on, 2,262 against 2,275 (big2 2,254); clean sentences changed 7 of 378 against 4; dev 64 against 65. Its loss checks: no underfitting (training loss 0.0009) and no rise on new sentences in 2 epochs (held-back sentences 0.0953 -> 0.0226 at step 500 -> 0.0170 at the end), but they end 19 times above the training loss, and 93% of their fall comes in the first 500 of 1,898 steps. So more steps mostly memorize. big3 (24,000) keeps the same recipe, so big3 against big3s shows what three times the data does with nothing else changed.
+Evidence: `eval/dictation_cleanup/reviews/2026-11-04_big3s.md`. No change to the app. Recorded by Claude.
+
 ---
 
 ## Proposed, not yet agreed
