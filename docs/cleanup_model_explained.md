@@ -61,25 +61,30 @@ matrix W in the layers above, two thin matrices A and B are added, and the layer
   More data helps only if it is **new** data. Each sentence appears as about 3 to 4 noisy copies: big1 7,500
   examples from 2,778 different sentences, big2 12,000 from 4,323, big3 24,000 from 5,752.
 
-## What big3 measures (overnight run, 2026-11-04)
+## What big3s and big3 showed (2026-11-04 and 05)
 
-- 24,000 examples (twice big2), r = 32 as big2, 2 epochs. big3's epoch 1 and big2's epoch 2 are the same number of
-  steps (2,850), so that pair shows what twice the data does at the same training cost.
-- The held-back examples are **whole sentences** it never trains on.
-- Every 500 steps, the loss on 300 training examples, on the held-back sentences, and on 400 cases of the
-  2,500-case test (never trained on; measured only). If the training loss keeps falling while the other two rise,
-  it's overfitting, and we'll see at which step.
-- The same check for big1's and big2's saved epochs, afterwards.
+big3s (8,000 examples) and big3 (24,000; big3s is a random part of it) have the same recipe, so the pair shows what
+three times the data does. Every 500 steps the trainer measures the loss on training examples, on held-back
+**whole sentences** and on 400 test cases it never trains on.
+
+- **Three times the data made it worse:** test 2,395 vs 2,418 of 2,500, clean sentences changed 15 vs 7.
+- **It overfits to our data generator.** The loss on held-back sentences (from the same sentence banks) kept falling,
+  to 0.0067. The loss on test cases (written by an earlier generator, other terms) stopped improving at step 500 and
+  ended at 0.0279, worse than big3s (0.0208) and big1 (0.0190). big2's test-case loss rose at every epoch.
+- **One habit we found the cause of:** the "broken" examples delete small words and the answer puts them back, so the
+  model learns to add "the" wherever one would fit, also to clean sentences ("for kids" -> "for the kids").
+- Details: `eval/dictation_cleanup/reviews/2026-11-04_big3s.md` and `2026-11-05_big3.md`.
 
 ## Knobs we can turn, and what we know about each
 
 | Knob | Today | What we know |
 | --- | --- | --- |
-| Data: different sentences | 5,752 (big3) | The real limit (above). Growing it needs new sentence banks, not more noise passes. |
-| Data: examples | 24,000 (big3) | big3 measures whether twice the copies help. |
-| Rank r | 16 (big1), 32 | 32 gave no gain (big2). |
+| Data: different sentences | 5,752 (big3) | The real limit (above). Growing it needs new sentences from new sources, not more template fills or noise passes. |
+| Data: examples | 24,000 (big3) | Three times the same data hurt (big3 vs big3s). |
+| Data: how noise is made | small words dropped with chance 0.6 in broken examples | Teaches adding "the" to clean sentences. Not yet changed. |
+| Rank r | 16 (big1), 32 | 32 gave no gain (big2, big3s). Whether it costs anything: untested. |
 | Layers trained | all 32, every linear layer | Nothing left to add. |
-| Epochs | 2 | The 2nd adds a little, a 3rd almost nothing (big1, big2). |
+| Epochs and steps | 2 | Test-case loss stops improving after about 500 steps (big3); big2's rose every epoch. |
 | Learning rate | 2e-4, cosine | Not tested. A lower rate (1e-4) is a cheap next test. |
 | LoRA dropout | 0.05 | Not tested. More dropout is a standard brake on memorizing. |
 | Loss weighting | every answer token equal | Not tested. Could weigh the tokens that matter (a fixed word, the "uncertain" flag) more. |
