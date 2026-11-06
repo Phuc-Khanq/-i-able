@@ -98,6 +98,16 @@ settings, but more copies of the same sentence banks still don't help, take thre
 "add a the" habit (clean sentences changed 7 vs 4). Its test-case loss swings between checks (0.0173 to 0.0235), and the
 held-back loss swings with it: mid-schedule, the weights still wander. Details: `eval/dictation_cleanup/reviews/2026-11-05_big3lr.md`.
 
+## What one epoch and 5e-5 showed (2026-11-06)
+
+big3s16lr1ep is big3s16lr in one epoch (the learning rate reaches 0 at the end of the first pass); big3s16lr5 is
+big3s16lr at learning rate 5e-5. Both tie big3s16lr: test 2,445 and 2,447 vs 2,446, and no head-to-head difference is
+beyond chance. Ending the schedule at epoch 1, or the smaller step, gives the lowest losses on new data of any run
+(test cases 0.0170, 0.0169), but the lower loss doesn't raise the score: the score turns on a few rare sound-alikes
+(heartworm, prednisone, AFO), and each run gets a different few of them right. **The settings have reached a plateau;
+the data is the limit.** One epoch gives the same score in half the time, so data tests can use one-epoch runs.
+Details: `eval/dictation_cleanup/reviews/2026-11-06_big3s16lr1ep_and_lr5.md`.
+
 ## Knobs we can turn, and what we know about each
 
 | Knob | Today | What we know |
@@ -107,8 +117,8 @@ held-back loss swings with it: mid-schedule, the weights still wander. Details: 
 | Data: how noise is made | small words dropped with chance 0.6 in broken examples | Teaches adding "the" to clean sentences. Not yet changed. |
 | Rank r | 16 | 32 costs: on the same data, rank 16 beats rank 32 on every measure, also on both new-data losses (big3s16 vs big3s, 2026-11-05). Use 16. |
 | Layers trained | all 32, every linear layer | Nothing left to add. |
-| Epochs and steps | 2 | Test-case loss stops improving after about 500 steps (big3); big2's rose every epoch. |
-| Learning rate | 1e-4, cosine | 1e-4 beats 2e-4 (big3s16lr vs big3s16): it learns faster, and it's the first run to beat big1. Its best point is the end of epoch 1. 5e-5: untested. |
+| Epochs and steps | 2 (1 is enough) | Test-case loss stops improving after about 500 steps (big3); big2's rose every epoch. One epoch ties two at 1e-4 (big3s16lr1ep 2,445 vs big3s16lr epoch 1 2,446) in half the time. |
+| Learning rate | 1e-4, cosine | 1e-4 beats 2e-4 (big3s16lr vs big3s16): it learns faster, and it's the first run to beat big1. Its best point is the end of epoch 1. 5e-5 ties 1e-4 (2,447; big3s16lr5) and is slower. Keep 1e-4. |
 | LoRA dropout | 0.05 | Not tested. More dropout is a standard brake on memorizing. |
 | Loss weighting | every answer token equal | Not tested. Could weigh the tokens that matter (a fixed word, the "uncertain" flag) more. |
 | The model's own confidence | not used | llama.cpp can report each token's probability; a low one on a changed word could set "unsure" by itself. Likely the biggest step for reliability, and it needs no training. |
