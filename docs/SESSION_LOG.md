@@ -1,5 +1,36 @@
 # Session log (newest first)
 
+## 2026-11-06 05:22 [Clean-up model]: The night's three runs scored; the training settings are settled
+Branch: voice-cleanup-app · Commits: 72268c2 eval: big3lr epoch 1 ties big1 but doesn't beat big3s16lr; 7a7c5dc eval: one epoch and learning rate 5e-5 both tie big3s16lr; plus this wrap-up. None pushed (616427f and earlier are on origin; 343d50a isn't either) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:**
+- Scored big3lr epoch 1 and reviewed it (`eval/dictation_cleanup/reviews/2026-11-05_big3lr.md`).
+- Night chain 2's other two runs refused to start at 23:41: a game held about 5 to 7 GB of the GPU. Chain 3 (23:46) waited for the GPU to be free 3 minutes in a row; it was free at 00:03, and the chain ended at 05:13.
+- Reviewed big3s16lr1ep and big3s16lr5 (`reviews/2026-11-06_big3s16lr1ep_and_lr5.md`).
+- Updated the slides brief (all three night runs in), the explainer, STATUS, DECISIONS.
+**Measured:** Khang's PC, RTX 5080, llama.cpp b11960 Q8_0 greedy, prompt t1_short, big1_test (2,500) and dev (67):
+- big3lr epoch 1 (24,000 examples): test 2,439, fair 2,301 cases 2,275, clean changed 7, dev 65. Fair head to head: 3-9 against big3s16lr epoch 1, 28-3 against big3.
+- big3s16lr1ep (one epoch, 83.8 min): test 2,445, fair 2,280, clean changed 3, silent guesses 1, dev 62. Loss at the end: training 0.0034, held-back 0.0120, test cases 0.0170. Fair head to head: 4-5 against big3s16lr epoch 1.
+- big3s16lr5 (5e-5, 168.0 min): epoch 1 test 2,447, fair 2,281, dev 64, test-case loss 0.0169. Final: 2,447, fair 2,283, dev 63, invented flagged 9, one number as digits, test-case loss 0.0188. Fair head to head: 4-2 against big3s16lr final (p 0.69).
+- Latency p50 about 285 ms on every run.
+- The app's guard (`check_cleanup`) blocks the dropped "not" (S29), "seventeen" for "seventy", "Alex" and "Hawthorne". It doesn't block "2.1" (same meaning).
+**Decisions:**
+- The training settings are settled (rank 16, 1e-4; one epoch is enough for experiments); the candidate proposal is unchanged (in DECISIONS.md).
+- More copies of the same data don't help even at the new settings (DECISIONS.md, 2026-11-05).
+**Still running:** nothing. The GPU is free.
+**Problems / blockers:**
+- A game blocked the GPU from 23:41 to 00:03. The chain now waits, so nothing was lost.
+- big3s16lr5 took 168 min vs big3s16lr's 150 for the same steps (cause not checked).
+- The last few test points are a coin flip on rare words (heartworm, prednisone, AFO). Settings can't fix that.
+**Next:**
+1. Khang: yes or no to big3s16lr epoch 1 as the candidate; then the hidden test (about 35 new phrases from Khang or Hung).
+2. Plan new sentences toward 100,000 (source, licence, cost), and test them with one-epoch runs.
+3. Optional, low value: big3lr1ep (24,000 in one epoch, about 4 h overnight).
+**Khang must do by hand:** push (343d50a, 72268c2, 7a7c5dc and this wrap-up); yes or no to the candidate; the hidden-test phrases.
+**For Cowork:**
+- Build the presentation from `docs/cleanup_progress_for_slides.md` (all results are in).
+- Research sources of new, varied sentences we can train on commercially (dictation-style, with medical and disability words).
+**Notes from Khang:** asked for this wrap-up to run after the night's runs finished.
+
 ## 2026-11-05 23:30 [Clean-up model]: Pushed the two-chat rules and the last wrap-up; night chain 2 running
 Branch: voice-cleanup-app · Commits: none besides this wrap-up; pushed 5fe1afa and 616427f to origin (Khang's OK) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:** pushed 5fe1afa (two-chat rules) and 616427f (the 23:20 wrap-up and the slides brief) to origin. Fixed the times in the 23:20 entry, STATUS and the slides brief (they said 23:35 and 23:30; the commit was at 23:20).
