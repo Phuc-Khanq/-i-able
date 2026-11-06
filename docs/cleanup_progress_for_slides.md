@@ -1,6 +1,7 @@
 # Dictation clean-up model: progress so far (material for slides)
 
-Written 2026-11-05 23:20 by the Claude Code "Clean-up model" chat, for Cowork to build a presentation from.
+Written 2026-11-05 23:20 by the Claude Code "Clean-up model" chat, for Cowork to build a presentation from; big3lr added
+at 23:55.
 Every number below was measured on Khang's PC (RTX 5080) and comes from the reviews in `eval/dictation_cleanup/reviews/`
 and `docs/SESSION_LOG.md`. Tonight's runs are not in yet: see the last section.
 
@@ -38,15 +39,19 @@ Each run changes one thing from an earlier run. "Fair 2,301" leaves out 199 case
 | big3 | 3x big3s's data, rank 32 | 24,000 | 2,395 | 2,250 | 15 | 428 min |
 | big3s16 | big3s at rank 16 | 8,000 | 2,432 | 2,277 | 4 | 182 min |
 | big3s16lr | big3s16 at half the learning rate | 8,000 | 2,446 (epoch 1) | 2,281 | 4 | 150 min |
+| big3lr | big3s16lr's settings, 3x the data | 24,000 | 2,439 (epoch 1) | 2,275 | 7 | 223 min to epoch 1 (then a restart) |
 
 Headline: big3s16lr is the first run to beat big1, by a small margin (on the fair cases, 10 wins and 4 losses).
+Three times the data at the same settings (big3lr) ties big1 and doesn't beat it (fair cases: 3 wins, 9 losses against
+big3s16lr; 7 and 7 against big1).
 
 ## Slide: what we learned about training
 
 1. **The network is big enough.** Training loss falls to 0.0004 (the model is right on nearly every token of the
    examples it has seen), so it is not underfitting. A bigger adapter (rank 32) was worse, not better.
 2. **It memorizes our data generator.** By the end of training, the loss on sentences it never saw is 30 to 50 times higher than on its
-   training data, and more copies of the same sentence banks made it worse (big3 vs big3s, at the old settings).
+   training data. At the old settings, more copies of the same sentence banks made it worse (big3 vs big3s); at the new
+   settings they no longer hurt much, but they don't help either (big3lr vs big3s16lr), and they take 3x the time.
 3. **The settings were costing us.** Rank 16 beat rank 32 on every measure; learning rate 1e-4 beat 2e-4 and even
    learned faster. The best point is the end of the first pass over the data (epoch 1).
 4. **So the next gain is new sentences, not more copies.** Khang's goal is 100,000 examples, which needs new sources.
@@ -81,10 +86,13 @@ Chart data, big3s16lr loss checks (lower is better; "new sentences" and "test ca
 - llama.cpp (MIT) runs the model: about 5x faster than transformers, the same answers.
 - Two Claude Code chats can now work in the repo at once (clean-up model and dictation), with rules for sharing it.
 
-## Tonight's runs (2026-11-05/06): pending
+## Tonight's runs (2026-11-05/06): one of three in
 
-The first night chain was stopped at 22:27 when the PC restarted (the Kaspersky installer restarted Windows), 3,163 of
-5,698 steps into big3lr (big3's 24,000 examples at the new settings). It was restarted at 23:16:
-big3lr's saved epoch-1 adapter is scored (does more data help at the new settings?), then big3s16lr1ep (is one pass
-enough?) and big3s16lr5 (is an even lower learning rate better?). Expected done about 05:00 on 11-06. The Clean-up
-model chat adds the results here and in the reviews when they finish. If this section still says "pending", they aren't in.
+- **In: does more data help at the new settings? Not really.** big3lr (big3's 24,000 at rank 16, learning rate 1e-4) was
+  stopped at 22:27 when the PC restarted (the Kaspersky installer restarted Windows), 3,163 of 5,698 steps in. Its saved
+  epoch-1 adapter scores 2,439 of 2,500: level with big1 (2,441), a little behind big3s16lr epoch 1 (2,446), far ahead of
+  big3 at the old settings (2,395). So the old "more data made it worse" was mostly the settings; but more copies of the
+  same sentences still don't help. Review: `eval/dictation_cleanup/reviews/2026-11-05_big3lr.md`.
+- **Pending: is one pass enough (big3s16lr1ep), and is an even lower learning rate better (big3s16lr5)?** They didn't
+  start at 23:41 because a game held the GPU; they start on their own once it is free (not after 05:00). If this line
+  still says "pending" in the morning, they aren't in.

@@ -89,12 +89,21 @@ included. The old steps overshot. It's the first run to beat big1 (test 2,446 vs
 point is the end of epoch 1 (test-case loss 0.0187, the lowest measured). In epoch 2, the new-data losses rise a little
 while the training loss keeps falling. Details: `eval/dictation_cleanup/reviews/2026-11-05_big3s16lr.md`.
 
+## What big3lr showed (2026-11-05)
+
+big3lr is big3s16lr with three times the data (big3's 24,000). A PC restart stopped it after epoch 1, so only that adapter
+was scored. It ties big1 (test 2,439 vs 2,441) and stays a little behind big3s16lr epoch 1 (2,446; on the fair cases 3 wins,
+9 losses). It is far ahead of big3, the same data at the old settings (2,395). So "more data made it worse" was mostly the
+settings, but more copies of the same sentence banks still don't help, take three times as long, and bring back the
+"add a the" habit (clean sentences changed 7 vs 4). Its test-case loss swings between checks (0.0173 to 0.0235), and the
+held-back loss swings with it: mid-schedule, the weights still wander. Details: `eval/dictation_cleanup/reviews/2026-11-05_big3lr.md`.
+
 ## Knobs we can turn, and what we know about each
 
 | Knob | Today | What we know |
 | --- | --- | --- |
 | Data: different sentences | 5,752 (big3) | The real limit (above). Growing it needs new sentences from new sources, not more template fills or noise passes. |
-| Data: examples | 24,000 (big3) | Three times the same data hurt (big3 vs big3s). |
+| Data: examples | 24,000 (big3) | Three times the same data hurt at the old settings (big3 vs big3s); at rank 16 and 1e-4 it no longer hurts much but doesn't help (big3lr epoch 1 vs big3s16lr epoch 1). |
 | Data: how noise is made | small words dropped with chance 0.6 in broken examples | Teaches adding "the" to clean sentences. Not yet changed. |
 | Rank r | 16 | 32 costs: on the same data, rank 16 beats rank 32 on every measure, also on both new-data losses (big3s16 vs big3s, 2026-11-05). Use 16. |
 | Layers trained | all 32, every linear layer | Nothing left to add. |

@@ -1,22 +1,23 @@
 # Status
 
-Last updated: 2026-11-05 23:30 (wrap-up; night chain 2 running). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-05 23:55 (big3lr scored; night chain 3 waits for the GPU). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
 - **Dictation clean-up: our own trained model.** big1, a LoRA adapter on Qwen3.5-4B (Apache 2.0) trained on Claude-written examples, is the candidate and the app's model file (`rewrite_gguf`, big1 Q8_0). It runs in llama-server behind the Rewriter (0.28 s median on the 5080), but only with `rewrite_backend: "llamacpp"`; the default backend is still the old Qwen2.5-3B. Dev full pass 63/67 by Khang's rule; dev is tuned on, so the hidden test decides.
-- **Training experiments:** the settings were the problem. Rank 16 beats rank 32 (big3s16 vs big3s), and half the learning rate (1e-4) beats 2e-4: big3s16lr is the first run to beat big1 (test 2,446 vs 2,441, fair cases 2,281 vs 2,275), by a small margin. Proposed: big3s16lr epoch 1 as the new candidate (needs Khang's OK). "Three times the data made it worse" was measured at the old settings only. The model still overfits to our data generator: loss on new data stops improving while training loss keeps falling. More data must be new sentences from new sources (Khang's goal: 100,000 examples). Explainer: `docs/cleanup_model_explained.md`. For slides: `docs/cleanup_progress_for_slides.md`.
+- **Training experiments:** the settings were the problem. Rank 16 beats rank 32 (big3s16 vs big3s), and half the learning rate (1e-4) beats 2e-4: big3s16lr is the first run to beat big1 (test 2,446 vs 2,441, fair cases 2,281 vs 2,275), by a small margin. Proposed: big3s16lr epoch 1 as the new candidate (needs Khang's OK). Three times the data at the new settings (big3lr) ties big1 but doesn't beat big3s16lr: more copies of the same sentences don't help. The model still overfits to our data generator: loss on new data stops improving while training loss keeps falling. More data must be new sentences from new sources (Khang's goal: 100,000 examples). Explainer: `docs/cleanup_model_explained.md`. For slides: `docs/cleanup_progress_for_slides.md`.
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
 ## Code chats now (rules: CLAUDE.md, "Two Code chats at once")
 
-- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: night chain 2 until about 05:00 on 11-06.
+- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: night chain 3 (waits for the GPU to be free, starts no later than 05:00, done by about 07:30 on 11-06).
 - **Dictation chat** (new, 2026-11-05): adds its own line at `/start` (job, files it edits, GPU use).
 - Shared, message first: `engine/voice/rewrite.py` (the trained model needs its exact prompt), `engine/voice/voice_check.py`, `engine/config.py`, the contracts. The night chain imports these and `eval/` at every step: no changes to them before it ends. Both chats work on `voice-cleanup-app`.
 
 ## Done recently
 
+- 2026-11-05 night: big3lr epoch 1 (big3's 24,000 at rank 16 and 1e-4; only epoch 1 exists, because of the restart) ties big1: test 2,439 vs 2,441, fair 2,301 cases 2,275 (7 wins, 7 losses), and stays a little behind big3s16lr epoch 1 (2,446; fair 3 wins, 9 losses). Far ahead of big3, the same data at the old settings (2,395; 28 to 3). Clean changed 7 vs 4, dev 65. `eval/dictation_cleanup/reviews/2026-11-05_big3lr.md`.
 - 2026-11-05 evening: two Code chats can share this folder (rules in CLAUDE.md, "Code chats now" above, /start and /wrap-up know about it). The first night chain was stopped at 22:27 when the Kaspersky installer restarted Windows: big3lr died at step 3,163 of 5,698, its epoch-1 adapter survived. Its test-case loss at steps 1,500 and 2,500 (0.0173, 0.0176) was the lowest of any run, but swings up to 0.006 between checks. Slides brief: `docs/cleanup_progress_for_slides.md`.
 - 2026-11-05 afternoon: big3s16lr (big3s16 with learning rate 1e-4, 150 min) is the first run to beat big1: test epoch 1 2,446 / final 2,444 vs 2,441, fair 2,301 cases 2,281 vs 2,275 (10 wins, 4 losses), terms no run trained on 89 vs 84, invented flagged 7 vs 8, clean changed 4 and dev 65 (equal). Lowest test-case loss measured, 0.0187 at the end of epoch 1, rising slightly in epoch 2 (0.0199). At step 500 all losses beat 2e-4's, so the old steps overshot. `eval/dictation_cleanup/reviews/2026-11-05_big3s16lr.md`.
 - 2026-11-05 midday: big3s16 (big3s's data at rank 16 instead of 32, 182 min) beats big3s: test 2,432 vs 2,418, fair 2,301 cases 2,277 vs 2,262 (17 wins, 2 losses), clean changed 4 vs 7, dev 65 vs 64, digits for spoken numbers 0 vs 4; final loss on held-back sentences 0.0133 vs 0.0170, on test cases 0.0200 vs 0.0208. Ties big1 on the fair cases (2,277 vs 2,275), clean (4) and dev (65), but makes more confident wrong guesses on medical words (HIV, AFO, PRP). `eval/dictation_cleanup/reviews/2026-11-05_big3s16.md`.
@@ -42,11 +43,11 @@ Last updated: 2026-11-05 23:30 (wrap-up; night chain 2 running). Session-by-sess
 
 ## In progress
 
-- Night chain 2, started 2026-11-05 23:16, expected done about 05:00 on 11-06. Each part is one change from big3s16lr (rank 16): big3lr epoch 1 (big3's 24,000, one pass; scoring only, saved before the restart), then big3s16lr1ep (one epoch), then big3s16lr5 (learning rate 5e-5). Output in `checkpoints/cleanup/<name>/` and `eval/dictation_cleanup/runs/`. The Clean-up model chat writes the reviews when it ends.
+- Night chain 3, started 2026-11-05 23:46. Chain 2 scored big3lr epoch 1, then its other two runs refused to start at 23:41: a game held about 5 GB of the GPU. Chain 3 waits until the GPU is free, then runs big3s16lr1ep (big3s16lr in one epoch, about 1.7 h with scoring; starts only before 05:00), then big3s16lr5 (learning rate 5e-5, about 3.3 h; starts only before 04:00). Output in `checkpoints/cleanup/<name>/` and `eval/dictation_cleanup/runs/`. The Clean-up model chat writes the reviews and a wrap-up when it ends.
 
 ## Next
 
-1. Read night chain 2's results (judged by the test-case loss and the fair split): does more data help at the new settings, is one epoch enough, is 5e-5 better. Then Khang picks the candidate (big3s16lr epoch 1 is proposed), before the hidden test. Proposed next run: big3lr1ep (big3's 24,000, one epoch, about 4 h).
+1. Read night chain 3's results (judged by the test-case loss and the fair split): is one epoch enough, is 5e-5 better. Then Khang picks the candidate (big3s16lr epoch 1 is proposed), before the hidden test. If one epoch does as well: big3lr1ep (big3's 24,000, one epoch, about 4 h) settles whether more data helps when the schedule ends at epoch 1.
 2. Hidden test: Khang or Hung writes about 35 new phrases (`messy → meant`). Claude turns them into cases and runs the candidate once as it ships (llama.cpp Q8_0, greedy).
 3. Try big1 in the demo with camera and mic (`"rewrite_backend": "llamacpp"` in config.local.json, preflight, run_demo); then decide whether llamacpp becomes the default.
 4. A plan for many more different sentences (toward 100,000 examples): source, licence, cost.
