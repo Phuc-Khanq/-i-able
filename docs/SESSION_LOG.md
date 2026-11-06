@@ -1,5 +1,25 @@
 # Session log (newest first)
 
+## 2026-11-05 23:35 [Clean-up model]: Two Code chats set up; a PC restart stopped the night chain; brief for slides
+Branch: voice-cleanup-app · Commits: 5fe1afa docs: rules for two Code chats; plus this wrap-up. Neither pushed (e8f4804 and earlier are on origin) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:**
+- Pushed the five commits up to e8f4804 to origin (Khang's OK).
+- Two Code chats in one folder: rules in CLAUDE.md ("Two Code chats at once"), "Code chats now" in STATUS.md; /start checks for the other chat (`ListAgents`) and adds its own line; /wrap-up edits only its own lines and puts the chat's name in the title. This chat is renamed "Clean-up model". The dictation chat isn't started yet.
+- Found why the night chain stopped: at 22:27 the Kaspersky installer in Downloads restarted Windows (System log event 1074, "restart", from Khang's account). big3lr died at step 3,163 of 5,698; its epoch-1 adapter (saved 21:56) survived. Not a fault in our code.
+- Restarted the chain at 23:16 (see Still running).
+- `docs/cleanup_progress_for_slides.md`: the clean-up story with measured numbers, for Cowork's presentation.
+**Measured:** big3lr loss checks (big3's 24,000, rank 16, lr 1e-4; training / held-back sentences / 400 test cases), Khang's PC, RTX 5080: step 500 0.0117/0.0125/0.0212; 1,000 0.0095/0.0090/0.0204; 1,500 0.0046/0.0094/0.0173; 2,000 0.0066/0.0130/0.0235; 2,500 0.0036/0.0083/0.0176; 2,849 (end of epoch 1) 0.0022/0.0109/0.0213; 3,000 0.0011/0.0076/0.0218. At 1,500 and 2,500 the test-case loss is the lowest of any run (big3s16lr's best 0.0187), but it swings by up to 0.006 between checks, and the epoch-1 save landed on a high point. About 4.7 s per step.
+**Decisions:** two Code chats may work in this folder at once (one branch, own files, one GPU job, live messages by `SendMessage`); in DECISIONS.md. Tonight scores big3lr's saved epoch 1 instead of re-training it: the trainer can't resume, and a full re-run (about 7.5 h) would leave no time for the other two runs.
+**Still running:** night chain 2, started 23:16, expected done about 05:00 on 11-06: A big3lr epoch 1 (export and score only), B big3s16lr1ep (8,000, one epoch, about 1.7 h with scoring), C big3s16lr5 (8,000, learning rate 5e-5, 2 epochs, about 3.3 h with scoring). Output: `checkpoints/cleanup/<name>/`, scores in `eval/dictation_cleanup/runs/<date>_<name>-*`; step log `chain_night2/steps.txt` in this chat's scratchpad. A watcher wakes this chat when it ends; it then writes the reviews and fills in the slides brief.
+**Problems / blockers:** big3lr's second epoch never ran (4.2 h of GPU gave only its epoch-1 adapter). Windows Update's active hours end at 02:00, so Windows could restart for updates after that (no restart is pending now). Results come about 05:00: a presentation made before then won't have them.
+**Next:**
+1. Read tonight's results; write the reviews; update the slides brief, STATUS and DECISIONS.
+2. Khang picks the candidate (big3s16lr epoch 1 is proposed); then the hidden test runs once on it.
+3. Proposed next run: big3lr1ep (big3's 24,000, one epoch, about 4 h).
+**Khang must do by hand:** no installers or restarts while a chain runs (pause Windows updates for the night if you can); push 5fe1afa and this wrap-up; yes or no to big3s16lr epoch 1 as the candidate; start the dictation chat in this same folder (no worktree) and run /start there.
+**For Cowork:** build the presentation from `docs/cleanup_progress_for_slides.md` (and `docs/cleanup_model_explained.md` for how the network works); its last section says whether tonight's results are in. Still open: where many new sentences come from, the lawyer list.
+**Notes from Khang:** none
+
 ## 2026-11-05 18:25: Clean-up training: why the newer runs lost (rank 32, learning rate); first run to beat big1
 Branch: voice-cleanup-app · Commits: c4ab513 big3s review; 6c94b8b big3 review; ed90cef big3s16 review; 3b6750f big3s16lr review; plus this wrap-up. None pushed · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:**
