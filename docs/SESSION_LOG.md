@@ -1,5 +1,20 @@
 # Session log (newest first)
 
+## 2026-11-06 09:10 [Clean-up model]: Pushed the night's results; the GPU is now busy with another project
+Branch: voice-cleanup-app · Commits: none besides this wrap-up; pushed 343d50a, 72268c2, 7a7c5dc and 4577341 to origin (Khang's OK) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:** pushed the night's four commits to origin `voice-cleanup-app` (616427f..4577341): the big3lr review, the review of the one-epoch and 5e-5 runs, the slides brief with all results, and the 05:22 wrap-up. Nothing went to `public`.
+**Measured:** none new (the night's numbers are in the 05:22 entry).
+**Decisions:** none
+**Still running:** nothing from this repo. At 09:08 the GPU had 9.9 GB in use at 75%: a training run from another project (DigiErhu, its own folder, started 07:23, 150,000 steps). Not ours; check `nvidia-smi` before any GPU job here.
+**Problems / blockers:** while DigiErhu trains, the 16 GB card has no room for a clean-up run (ours peaks at 9.7 GB).
+**Next:**
+1. Khang: yes or no to big3s16lr epoch 1 as the candidate; then the hidden test (about 35 new phrases).
+2. A plan for new sentences toward 100,000 (source, licence, cost), tested with one-epoch runs.
+3. Try the trained model in the demo with camera and mic.
+**Khang must do by hand:** push this wrap-up; yes or no to the candidate; the hidden-test phrases.
+**For Cowork:** build the presentation from `docs/cleanup_progress_for_slides.md` (all results in); research commercially usable sources of new, varied dictation-style sentences.
+**Notes from Khang:** none
+
 ## 2026-11-06 05:22 [Clean-up model]: The night's three runs scored; the training settings are settled
 Branch: voice-cleanup-app · Commits: 72268c2 eval: big3lr epoch 1 ties big1 but doesn't beat big3s16lr; 7a7c5dc eval: one epoch and learning rate 5e-5 both tie big3s16lr; plus this wrap-up. None pushed (616427f and earlier are on origin; 343d50a isn't either) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:**

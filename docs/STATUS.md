@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-06 05:20 (night chain 3 done: one epoch and 5e-5 tie big3s16lr; the settings are settled). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-06 09:10 (the night's results pushed; another project is training on the GPU). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
@@ -11,7 +11,7 @@ Last updated: 2026-11-06 05:20 (night chain 3 done: one epoch and 5e-5 tie big3s
 
 ## Code chats now (rules: CLAUDE.md, "Two Code chats at once")
 
-- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: none (night chain 3 ended 2026-11-06 05:13).
+- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: none (night chain 3 ended 2026-11-06 05:13). Since 07:23 on 11-06 a training run from another project (DigiErhu, its own folder) holds about 9.9 GB: check `nvidia-smi` before any GPU job here.
 - **Dictation chat** (new, 2026-11-05): adds its own line at `/start` (job, files it edits, GPU use).
 - Shared, message first: `engine/voice/rewrite.py` (the trained model needs its exact prompt), `engine/voice/voice_check.py`, `engine/config.py`, the contracts. Both chats work on `voice-cleanup-app`. A training or scoring chain imports these and `eval/` at every step: no changes to them while one runs.
 
@@ -44,7 +44,7 @@ Last updated: 2026-11-06 05:20 (night chain 3 done: one epoch and 5e-5 tie big3s
 
 ## In progress
 
-- Nothing running. The GPU is free.
+- Nothing from this repo. The GPU is busy with another project's training (see "Code chats now").
 
 ## Next
 
@@ -68,7 +68,7 @@ Last updated: 2026-11-06 05:20 (night chain 3 done: one epoch and 5e-5 tie big3s
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: 343d50a, 72268c2 and the 2026-11-06 commits (night chain 3's review and wrap-up). Everything up to 616427f is on origin.
+- Not pushed: the 2026-11-06 09:10 wrap-up. Everything up to 4577341 is on origin.
 - Disk: each training run keeps about 20 GB (one epoch) or 40 GB (two) in `checkpoints/cleanup/<name>/`; its `merged*/` folders and bf16 GGUFs can be rebuilt with export.py and deleted. D: had 771 GB free on 2026-11-06.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
