@@ -1,6 +1,6 @@
 # Dictation clean-up model: progress so far (material for slides)
 
-Written 2026-11-05 23:30 by the Claude Code "Clean-up model" chat, for Cowork to build a presentation from.
+Written 2026-11-05 23:20 by the Claude Code "Clean-up model" chat, for Cowork to build a presentation from.
 Every number below was measured on Khang's PC (RTX 5080) and comes from the reviews in `eval/dictation_cleanup/reviews/`
 and `docs/SESSION_LOG.md`. Tonight's runs are not in yet: see the last section.
 

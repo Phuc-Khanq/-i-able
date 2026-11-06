@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-05 23:35 (wrap-up; night chain 2 running). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-05 23:30 (wrap-up; night chain 2 running). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
@@ -66,7 +66,7 @@ Last updated: 2026-11-05 23:35 (wrap-up; night chain 2 running). Session-by-sess
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: 5fe1afa (two-chat rules) and the 23:35 wrap-up. Everything before them is on origin.
+- Not pushed: the second 2026-11-05 evening wrap-up. Everything before it is on origin (616427f and earlier).
 - Disk: each training run keeps about 40 GB in `checkpoints/cleanup/<name>/`; its `merged*/` folders and bf16 GGUFs can be rebuilt with export.py and deleted.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.

@@ -1,6 +1,21 @@
 # Session log (newest first)
 
-## 2026-11-05 23:35 [Clean-up model]: Two Code chats set up; a PC restart stopped the night chain; brief for slides
+## 2026-11-05 23:30 [Clean-up model]: Pushed the two-chat rules and the last wrap-up; night chain 2 running
+Branch: voice-cleanup-app · Commits: none besides this wrap-up; pushed 5fe1afa and 616427f to origin (Khang's OK) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:** pushed 5fe1afa (two-chat rules) and 616427f (the 23:20 wrap-up and the slides brief) to origin. Fixed the times in the 23:20 entry, STATUS and the slides brief (they said 23:35 and 23:30; the commit was at 23:20).
+**Measured:** none new (the big3lr loss checks are in the 23:20 entry).
+**Decisions:** none
+**Still running:** night chain 2 (started 23:16, expected done about 05:00 on 11-06). At 23:30 it was scoring big3lr epoch 1 on the 2,500 test cases (1,000 done, about 0.35 s each); then big3s16lr1ep, then big3s16lr5. Output and step log as in the 23:20 entry. A watcher wakes this chat when the chain ends; it then writes the reviews and fills in the slides brief.
+**Problems / blockers:** none new. Another Claude session ("DigiErhu physics synthesizer setup") started on this PC at 23:29; by its name it looks like another project. If it uses the GPU before 05:00, training slows down or runs out of memory.
+**Next:**
+1. Read tonight's results; write the reviews; update the slides brief, STATUS and DECISIONS.
+2. Khang picks the candidate (big3s16lr epoch 1 is proposed); then the hidden test runs once on it.
+3. Proposed next run: big3lr1ep (big3's 24,000, one epoch, about 4 h).
+**Khang must do by hand:** keep the PC on and the GPU free until about 05:00 (no installers or restarts, nothing GPU-heavy in the other session); push this wrap-up; yes or no to big3s16lr epoch 1 as the candidate.
+**For Cowork:** build the presentation from `docs/cleanup_progress_for_slides.md`; its last section says whether tonight's results are in.
+**Notes from Khang:** none
+
+## 2026-11-05 23:20 [Clean-up model]: Two Code chats set up; a PC restart stopped the night chain; brief for slides
 Branch: voice-cleanup-app · Commits: 5fe1afa docs: rules for two Code chats; plus this wrap-up. Neither pushed (e8f4804 and earlier are on origin) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:**
 - Pushed the five commits up to e8f4804 to origin (Khang's OK).
