@@ -88,6 +88,7 @@ CONTEXT_CHARS = 300      # the clean-up sees at most this much of what this dict
 SPEECH_GUARD_S = 1.0     # a mouth gesture this soon after the mic heard speech is talking
 TICK_S = 0.25
 REPEAT_CLICK_S = 3.0      # "click Send" again this soon after Send was clicked is a repeat, not a new click
+HISTORY_STEPS = 20        # "scratch that" can go back this many changes of one preview
 
 
 
@@ -208,6 +209,10 @@ class ModeManager:
         self._typed = ""                         # what this dictation typed so far (the last CONTEXT_CHARS)
         self._readings: dict[str, tuple[list[str], bool]] = {}   # "clean" / "refined" -> (alternatives, uncertain)
         self._choice = 1                         # which reading shows: 1 the model's, 2 and 3 its other readings
+        # Fixing words by voice (_voice_edit): "scratch that" takes back the last change to the preview, one step at a
+        # time: the last thing said, or the last fix. Each entry is (the preview before that change, was it final).
+        self._history: list[tuple[list[dict], bool]] = []
+        self._final = False                      # the preview was fixed by hand or by voice: no new clean-up of it
         self._lock = threading.RLock()
         self._stop = threading.Event()
 
@@ -333,6 +338,9 @@ class ModeManager:
                 # be typed into the preview); "Don't." / "Ya." likewise. With nothing waiting they're just words.
                 self._do(Command(name=heard))
                 return
+            if (self.preview and not self.question and self.mode in (Mode.DICTATION, Mode.POINTER)
+                    and self._voice_edit(transcript["text"])):
+                return                        # "change Hawthorne to Hathaway" fixed the card
             if self.mode == Mode.SCROLL:
                 self._scroll_transcript(transcript, clauses)
                 return
@@ -521,9 +529,9 @@ class ModeManager:
                 i = msg.get("index", -1)
                 if 0 <= i < len(shown) and msg.get("text"):
                     # the index is into what the UI shows; a fixed word is final, so no new clean-up
-                    self.preview = [dict(w) for w in shown]
-                    self.preview[i] = {"text": msg["text"], "conf": 1.0}
-                    self._preview_changed(clean_up=False)
+                    words = [dict(w) for w in shown]
+                    words[i] = {"text": msg["text"], "conf": 1.0}
+                    self._edit_preview(words)
 
     def on_ui_target(self, msg: dict) -> None:
         with self._lock:
@@ -540,6 +548,8 @@ class ModeManager:
     # ----------------------------------------------------------------- intents
     def _do(self, cmd: Command) -> None:
         name, m = cmd.name, self.mode
+        if name == "key_backspace" and self.preview:
+            name = "delete_last_word"                 # "backspace" with a preview waiting fixes the preview, not the app
         label = commands.COMMAND_LABELS.get(name)
         if label and not (name == "undo" and self.preview):   # "scratch that" on a preview: the preview shows it
             self._ui(messages.COMMAND, label=label)           # the card flashes it: the user sees it was heard
@@ -607,9 +617,14 @@ class ModeManager:
             self._ask_send()
         elif name == "undo":
             if self.preview:
-                self._discard_preview()
+                self._undo_preview()
             else:
                 self._os(topics.OS_UNDO)
+        elif name == "delete_last_word":
+            if self.preview:
+                self._edit_preview(commands.drop_last_word(self._shown_words()))
+            else:
+                self._os(topics.OS_KEY, key="ctrl+backspace")   # the word before the text cursor
         elif name == "new_line":
             if self.preview:
                 self._status("warn", "Nod to insert the preview first")
@@ -795,8 +810,57 @@ class ModeManager:
         self._add_to_preview(words)
 
     def _add_to_preview(self, words: list[dict]) -> None:
+        self._remember()
         self.preview = self.preview + list(words)  # keep talking: new words join the bubble
+        self._final = False                        # the whole passage goes to the clean-up again
         self._preview_changed()
+
+    # ------------------------------------------------------- fixing words
+    def _remember(self) -> None:
+        """Keep the preview as it is now, so "scratch that" can bring it back."""
+        self._history.append(([dict(w) for w in self.preview], self._final))
+        del self._history[:-HISTORY_STEPS]
+
+    def _edit_preview(self, words: list[dict], label: str | None = None) -> None:
+        """The preview becomes `words` (what the card showed, fixed). A fix is final: no new clean-up of it, and
+        "yes" types exactly this. `label` flashes on the card ("Changed")."""
+        self._remember()
+        self.preview = [dict(w) for w in words]
+        self._final = True
+        self._preview_changed(clean_up=False)
+        if label:
+            self._ui(messages.COMMAND, label=label)
+
+    def _undo_preview(self) -> None:
+        """"Scratch that": the preview as it was before the last thing said or the last fix. Nothing to go back to:
+        drop it."""
+        if not self._history:
+            self._discard_preview()
+            return
+        words, final = self._history.pop()
+        self.preview, self._final = words, final
+        self._preview_changed(clean_up=not final)   # a passage that was never fixed gets its clean-up again
+
+    def _voice_edit(self, text: str) -> bool:
+        """ "change Hawthorne to Hathaway" / "delete Hawthorne", said while a preview waits: fix the card and return
+        True. Only when the old words are on the card: otherwise it's dictation ("Change the oil to synthetic")
+        and this returns False. After a trigger word ("Venus, change ...") it is always read as a fix."""
+        body, triggered = launch.strip_trigger(text)
+        fixed = commands.parse(body, allow_targets=False)
+        if fixed is not None and fixed.name != "type_text":
+            return False                           # "delete my voice data", "delete the last word": the command
+        edit = commands.parse_edit(body)
+        if edit is None:
+            return False
+        words = commands.apply_edit(self._shown_words(), edit)
+        if words is None:
+            if triggered:
+                self._status("warn", f'Couldn\'t find "{edit.old}" on the card')
+                return True
+            return False
+        self._log(f'[edit] {edit.kind} "{edit.old}"' + (f' -> "{edit.new}"' if edit.kind == "replace" else ""))
+        self._edit_preview(words, "Changed" if edit.kind == "replace" else "Deleted")
+        return True
 
     def _preview_text(self) -> str:
         """What "yes" would type: the clean text if it's showing, else the user's own words."""
@@ -877,6 +941,7 @@ class ModeManager:
         self._rw_running = False
         if not self.preview:
             self._use_clean = True                         # "use original" lasts for one preview
+            self._history, self._final = [], False         # typed or dropped: nothing to take back
         elif self._cleaning() and clean_up:
             self._rw_running = True
             self.bus.publish(topics.REWRITE_REQUEST,

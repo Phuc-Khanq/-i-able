@@ -107,6 +107,10 @@ FIXED_COMMANDS: dict[str, str] = {
     "scratch that": "undo",
     "undo": "undo",
     "undo that": "undo",
+    "delete last word": "delete_last_word",       # the preview's last word; Ctrl+Backspace with no preview
+    "delete the last word": "delete_last_word",
+    "remove last word": "delete_last_word",
+    "remove the last word": "delete_last_word",
     "new line": "new_line",
     "next line": "new_line",
     # Answers. The card lists a few of each. Many ways to say them, so a misheard one is never a dead end
@@ -312,7 +316,7 @@ COMMAND_LABELS: dict[str, str] = {
     "key_zoom_out": "Zoom out", "key_page_up": "Page up", "key_page_down": "Page down", "key_top": "Top",
     "key_bottom": "Bottom", "key_enter": "Enter", "key_tab": "Tab", "key_backspace": "Backspace",
     "scroll_up": "Scroll up", "scroll_down": "Scroll down", "go_back": "Back", "escape": "Escape",
-    "undo": "Undo", "new_line": "New line", "quit_app": "Quitting",
+    "undo": "Undo", "new_line": "New line", "quit_app": "Quitting", "delete_last_word": "Deleted last word",
 }
 
 # System commands -> the os.system action (os_output: volume by media keys, brightness through Windows)
@@ -329,7 +333,10 @@ COMMAND_INFO: dict[str, tuple[str, str]] = {
     "quit_app": ("Setup", "Quits [eye]able completely: the engine, camera, mic and card all stop. Say \"quit\" alone; works "
                           "in every mode, even paused"),
     "send_it": ("Dictation", "Types the preview and presses Enter, after asking \"send?\""),
-    "undo": ("Dictation", "Drops the preview, or presses Ctrl+Z when none is showing"),
+    "undo": ("Dictation", "Takes back the last thing you said or your last fix on the card, or presses Ctrl+Z when no "
+                          "preview is showing. \"No\" drops the whole preview"),
+    "delete_last_word": ("Dictation", "Deletes the last word on the card, or the word before the text cursor "
+                                      "(Ctrl+Backspace) when no preview is showing"),
     "new_line": ("Dictation", "Starts a new line in the preview"),
     "use_original": ("Dictation", "Types your own words instead of the cleaned-up text"),
     "option_1": ("Dictation", "Goes back to the clean-up's first reading, after \"option two\" or \"option three\""),
@@ -391,7 +398,7 @@ COMMAND_INFO: dict[str, tuple[str, str]] = {
     "key_bottom": ("Keys and moving around", "Ctrl+End: bottom of the page or document"),
     "key_enter": ("Keys and moving around", "Enter"),
     "key_tab": ("Keys and moving around", "Tab"),
-    "key_backspace": ("Keys and moving around", "Backspace"),
+    "key_backspace": ("Keys and moving around", "Backspace. While a preview waits, deletes its last word instead"),
 }
 
 # Said alone while dictating, these end Dictation mode (the mode manager checks; anywhere else they are words
@@ -615,6 +622,151 @@ def parse(text: str, allow_targets: bool = True, target_verbs=TARGET_VERBS) -> C
         # "delete my voice data". "okay" stays a filler word, so "okay, click send" still works.
         return None
     return _fixed(clean) or (_target(clean, target_verbs) if allow_targets else None) or _type(clean)
+
+
+# ------------------------------------------------------------------ fixing words by voice
+# While a preview waits, "change Hawthorne to Hathaway" or "delete Hawthorne" fixes the words on the card. The mode
+# manager only treats it as a fix when the old words are on the card (find_span), so "Change the oil to synthetic"
+# with no "oil" on the card stays dictated text. After a trigger word ("Venus, change ...") it is always a fix.
+EDIT_REPLACE_VERBS = ("change", "replace", "correct")   # not "fix": "fix the bug with the login" is dictation
+EDIT_SEPARATORS = ("to", "with", "into")
+EDIT_DELETE_VERBS = ("delete", "remove", "erase")
+EDIT_MAX_OLD_WORDS = 4         # "change <up to 4 words> to ..."
+EDIT_MAX_NEW_WORDS = 6         # "... to <up to 6 words>"; longer is dictation, not a fix
+EDIT_MATCH_CUTOFF = 80         # fuzzy score (0-100) for finding the old words on the card
+EDIT_EXACT_BELOW = 4           # old words shorter than this (letters) must match exactly ("the" never finds "they")
+_EDIT_LEAD = {"the", "word", "words"}   # "change the word Hawthorne to ..." -> "Hawthorne"
+
+
+@dataclass(frozen=True)
+class Edit:
+    kind: str        # "replace" or "delete"
+    old: str         # the words to find, as said
+    new: str = ""    # replace: the new words, as Whisper wrote them (its capitals kept)
+
+
+def word_key(text: str) -> str:
+    """A word for comparing: lowercase, no punctuation ("Hawthorne," -> "hawthorne")."""
+    return re.sub(r"[^\w']", "", str(text).lower().replace("’", "'"))
+
+
+def parse_edit(text: str) -> Edit | None:
+    """ "change X to Y" / "replace X with Y" / "correct X to Y" / "delete X" / "remove X", as a whole utterance.
+    None for anything else, for "delete that" / "delete my voice data" (fixed commands) and for a long or
+    multi-sentence utterance (that's dictation)."""
+    raw = [w for w in str(text).replace("’", "'").split() if word_key(w)]
+    while raw and word_key(raw[0]) in FILLER_WORDS:
+        raw.pop(0)
+    if len(raw) > 2 and f"{word_key(raw[0])} {word_key(raw[1])} " in FILLER_PREFIXES:   # "can you change ..."
+        raw = raw[2:]
+    if len(raw) < 2:
+        return None
+    for w in raw[:-1]:
+        if re.search(r"[.!?;]$", w):
+            return None                   # two sentences: dictation
+    verb, rest = word_key(raw[0]), raw[1:]
+    if verb in EDIT_REPLACE_VERBS:
+        cut = next((i for i, w in enumerate(rest) if i > 0 and word_key(w) in EDIT_SEPARATORS), None)
+        if cut is None:
+            return None
+        old, new = rest[:cut], rest[cut + 1:]
+        kind = "replace"
+    elif verb in EDIT_DELETE_VERBS:
+        old, new, kind = rest, [], "delete"
+    else:
+        return None
+    while len(old) > 1 and word_key(old[0]) in _EDIT_LEAD:
+        old = old[1:]
+    if kind == "delete" and len(old) > 1 and word_key(old[-1]) == "please":
+        old = old[:-1]
+    if len(new) > 1 and word_key(new[-1]) == "please":   # "... to Tuesday, please"
+        new = new[:-1]
+    if not old or len(old) > EDIT_MAX_OLD_WORDS or (kind == "replace" and not 1 <= len(new) <= EDIT_MAX_NEW_WORDS):
+        return None
+    if kind == "delete" and (len(old) == 1 and word_key(old[0]) in POINTING_WORDS):
+        return None                       # "delete that" / "remove it": the fixed command
+    old_text = " ".join(word_key(w) for w in old)
+    new_text = " ".join(w.strip(".,!?;:\"'") for w in new).strip()
+    if kind == "replace" and not new_text:
+        return None
+    return Edit(kind=kind, old=old_text, new=new_text)
+
+
+def find_span(words: list[str], old: str) -> tuple[int, int] | None:
+    """Where `old` is in `words` (the card's words): (start, end) for words[start:end], or None.
+    Fuzzy, because Whisper may write the misheard word a little differently the second time; a span one word
+    shorter or longer also counts ("health care" for "healthcare"). The best score wins; on a tie, the last one
+    (the newest words)."""
+    target = old.split()
+    if not target or not words:
+        return None
+    keys = [word_key(w) for w in words]
+    want = " ".join(target)
+    exact_only = len(want.replace(" ", "")) < EDIT_EXACT_BELOW
+    best = None
+    for length in {max(1, len(target) - 1), len(target), len(target) + 1}:
+        for i in range(len(keys) - length + 1):
+            have = " ".join(k for k in keys[i:i + length] if k)
+            if not have:
+                continue
+            if have == want or have.replace(" ", "") == want.replace(" ", ""):
+                score = 100.0
+            elif exact_only:
+                continue
+            else:
+                score = max(fuzz.ratio(have, want), fuzz.ratio(have.replace(" ", ""), want.replace(" ", "")))
+                if score < EDIT_MATCH_CUTOFF:
+                    continue
+            rank = (score, -abs(length - len(target)), i)
+            if best is None or rank > best[0]:
+                best = (rank, (i, i + length))
+    return best[1] if best else None
+
+
+def _ends_sentence(text: str) -> bool:
+    return bool(re.search(r"[.!?][\"')\]]*$", text))
+
+
+def apply_edit(words: list[dict], edit: Edit) -> list[dict] | None:
+    """The card's words ({"text", "conf"}) with the edit made, or None if the old words aren't there.
+    New words get conf 1.0 (the user chose them). Punctuation and a sentence's capital letter stay where they were:
+    "... Mr. Hawthorne." -> "... Mr. Hathaway."."""
+    span = find_span([w["text"] for w in words], edit.old)
+    if span is None:
+        return None
+    start, end = span
+    first, last = words[start]["text"], words[end - 1]["text"]
+    tail = re.search(r"[.,!?;:\"')\]]*$", last).group()
+    sentence_start = start == 0 or _ends_sentence(words[start - 1]["text"])
+    out = [dict(w) for w in words[:start]]
+    if edit.kind == "replace":
+        new = [{"text": t, "conf": 1.0} for t in edit.new.split()]
+        if sentence_start or first[:1].isupper():
+            new[0]["text"] = new[0]["text"][:1].upper() + new[0]["text"][1:]
+        if tail and not re.search(r"[.,!?;:]$", new[-1]["text"]):
+            new[-1]["text"] += tail
+        out += new
+    else:
+        if tail and out and not re.search(r"[.,!?;:\"')\]]$", out[-1]["text"]):
+            out[-1]["text"] += tail      # "see you Monday Hawthorne." minus Hawthorne -> "see you Monday."
+        rest = words[end:]
+        if rest and sentence_start:      # the sentence's first word went: the next one gets the capital
+            rest = [dict(rest[0], text=rest[0]["text"][:1].upper() + rest[0]["text"][1:])] + [dict(w) for w in rest[1:]]
+            out += rest
+            return out
+    out += [dict(w) for w in words[end:]]
+    return out
+
+
+def drop_last_word(words: list[dict]) -> list[dict]:
+    """The card's words without the last one; its sentence-ending punctuation moves to the word before."""
+    if not words:
+        return []
+    out = [dict(w) for w in words[:-1]]
+    tail = re.search(r"[.!?]+[\"')\]]*$", words[-1]["text"])
+    if tail and out and not re.search(r"[.,!?;:]$", out[-1]["text"]):
+        out[-1]["text"] += tail.group()
+    return out
 
 
 if __name__ == "__main__":

@@ -68,6 +68,14 @@ def render(settings=None) -> str:
         lines += [f"## {cat}", "", "| Say | What it does |", "| --- | --- |"]
         lines += [f"| {say} | {does} |" for say, does in table]
         lines.append("")
+    lines += ["## Fixing words on the card", "",
+              "While a preview waits. It only counts as a fix when those words are on the card; otherwise it is "
+              "dictated like any other sentence. Say \"Venus\" first to make sure it is read as a fix.", "",
+              "| Say | What it does |", "| --- | --- |",
+              '| "change <words> to <new words>", "replace <words> with <new words>", "correct <words> to <new words>" '
+              '| Swaps those words on the card (the last place they appear) |',
+              '| "delete <words>", "remove <words>" | Takes those words off the card |',
+              '| "scratch that" | Takes back the last thing you said or your last fix, one step at a time |', ""]
     apps = ", ".join(sorted(settings.launch_apps))
     sites = ", ".join(sorted(settings.launch_sites))
     lines += ["## Apps and sites", "", "| Say | What it does |", "| --- | --- |",
