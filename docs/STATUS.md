@@ -12,7 +12,7 @@ Last updated: 2026-11-06 09:10 (the night's results pushed; another project is t
 ## Code chats now (rules: CLAUDE.md, "Two Code chats at once")
 
 - **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: none (night chain 3 ended 2026-11-06 05:13). Since 07:23 on 11-06 a training run from another project (DigiErhu, its own folder) holds about 9.9 GB: check `nvidia-smi` before any GPU job here.
-- **Dictation chat** (new, 2026-11-05): adds its own line at `/start` (job, files it edits, GPU use).
+- **Dictation chat** ("Dictation" in `ListAgents`, since 2026-11-06): the dictation path from mic to typed text, except the clean-up model: mic and voice detection, Whisper and how well it hears our users, commands vs dictation, the dictation card, confirm/drop. Owns `engine/voice/` audio_in, mic, dictation, commands, command_list, personal_commands, launch, voice_data, live_check, whisper_bench, whisper_import, command_bench, `finetune/`; `engine/eyes/dictation_card.py`; `engine/core/mode_manager.py` (message the clean-up chat before changing how it calls the Rewriter); their tests. GPU: none so far; Whisper runs only after checking "In progress" and `nvidia-smi`.
 - Shared, message first: `engine/voice/rewrite.py` (the trained model needs its exact prompt), `engine/voice/voice_check.py`, `engine/config.py`, the contracts. Both chats work on `voice-cleanup-app`. A training or scoring chain imports these and `eval/` at every step: no changes to them while one runs.
 
 ## Done recently
