@@ -14,6 +14,7 @@ answer. The model answers {"text", "alternatives", "uncertain"}; see parse_answe
 from __future__ import annotations
 
 import json
+import math
 import re
 import secrets
 import subprocess
@@ -64,6 +65,7 @@ class Answer:
     text: str
     alternatives: list[str] = field(default_factory=list)
     uncertain: bool = False
+    weak_word: str = ""          # the content word the model was least sure of, when under UNSURE_BELOW
 
 
 def parse_answer(raw: str) -> Answer | None:
@@ -81,6 +83,76 @@ def parse_answer(raw: str) -> Answer | None:
     alts = data.get("alternatives", [])
     alts = [a for a in alts if isinstance(a, str) and a.strip()] if isinstance(alts, list) else []
     return Answer(data["text"].strip(), alts, data.get("uncertain") is True)
+
+
+# ------------------------------------------------------------------ the model's own doubt
+# The model gives its wrong answers as sure (54 of 54 on the 2,500 test cases), but the probability it gives each word
+# it writes carries the doubt. A content word under UNSURE_BELOW marks the answer unsure, and the card then says "Check
+# this". Measured 2026-11-10 (eval/dictation_cleanup/reviews/2026-11-10_confidence_flag.md): at 0.8 it catches 18 of
+# the 20 meaning-changing errors on the test and marks 5% of right answers unsure (16 to 21% on the harder dev cases),
+# for about 23 ms a sentence. eval/dictation_cleanup/confidence.py measures with these same functions.
+UNSURE_BELOW = 0.8
+# Small words whose choice rarely changes the meaning. Negations, numbers and names are deliberately NOT here.
+SMALL_WORDS = frozenset("""a an the my your his her its our their this that these those i you he she it we they me him
+us them and or but so to of in on at for with from by as is are was were be been am do does did has have had will would
+can could should please just also then there here what who which when where how if up out about into over than
+i'm it's i'll we'd i'd you're that's let's""".split())
+_WORD = re.compile(r"[\w'’]+")
+
+
+def text_span(raw: bytes) -> tuple[int, int] | None:
+    """Byte range of the "text" value inside the model's JSON answer, or None."""
+    key = b'"text": "'
+    s = raw.find(key)
+    if s < 0:
+        return None
+    s += len(key)
+    i = s
+    while i < len(raw):
+        if raw[i:i + 1] == b"\\":
+            i += 2
+            continue
+        if raw[i:i + 1] == b'"':
+            break
+        i += 1
+    return s, i
+
+
+def weakest_word(tokens: list[dict]) -> tuple[str, float] | None:
+    """The content word in the answer's "text" the model was least sure of, and that probability.
+
+    `tokens` is llama-server's completion_probabilities: each generated token's "bytes" (or "token") and "logprob".
+    Small words (SMALL_WORDS) and punctuation-only tokens don't count; negations and numbers do. A word is as sure as
+    its least sure token. None when there is no text or no content word."""
+    pieces, starts, pos = [], [], 0
+    for t in tokens:
+        b = bytes(t["bytes"]) if t.get("bytes") is not None else str(t.get("token", "")).encode("utf-8")
+        pieces.append(b)
+        starts.append(pos)
+        pos += len(b)
+    raw = b"".join(pieces)
+    span = text_span(raw)
+    if span is None:
+        return None
+    s, e = span
+    text = raw[s:e].decode("utf-8", "replace")
+    char_b = [0]
+    for ch in text:
+        char_b.append(char_b[-1] + len(ch.encode("utf-8")))
+    best: tuple[str, float] | None = None
+    for m in _WORD.finditer(text):
+        if m.group().lower().replace("’", "'").strip("'") in SMALL_WORDS:
+            continue
+        b0, b1 = s + char_b[m.start()], s + char_b[m.end()]
+        for i, t in enumerate(tokens):
+            lp = t.get("logprob")
+            if lp is None or not (starts[i] < b1 and starts[i] + len(pieces[i]) > b0):
+                continue
+            if not re.search(r"\w", pieces[i].decode("utf-8", "replace")):
+                continue
+            if best is None or lp < best[1]:
+                best = (m.group(), lp)
+    return None if best is None else (best[0], math.exp(best[1]))
 
 
 # ------------------------------------------------------------------ the server
@@ -195,13 +267,17 @@ class LlamaServer:
         with self._http.open(req, timeout=timeout_s) as r:
             return json.loads(r.read().decode("utf-8"))
 
-    def complete(self, prompt: str, n_predict: int, timeout_s: float, sampling: dict = GREEDY) -> dict:
-        """POST /completion. A server that died is started again once before the request."""
+    def complete(self, prompt: str, n_predict: int, timeout_s: float, sampling: dict = GREEDY,
+                 n_probs: int = 0) -> dict:
+        """POST /completion. A server that died is started again once before the request. n_probs > 0 also returns
+        each generated token's probability (completion_probabilities), taken before sampling."""
         if not self.running:
             self._log(f"[cleanup] llama-server stopped ({self.last_lines(1)}); starting it again")
             self.start()
-        return self.post("/completion", {"prompt": prompt, "n_predict": n_predict, "seed": 1234,
-                                         "cache_prompt": True, "stream": False, **sampling}, timeout_s)
+        body = {"prompt": prompt, "n_predict": n_predict, "seed": 1234, "cache_prompt": True, "stream": False, **sampling}
+        if n_probs > 0:
+            body["n_probs"] = n_probs
+        return self.post("/completion", body, timeout_s)
 
     def stop(self) -> None:
         if self._proc is not None and self._proc.poll() is None:
@@ -236,13 +312,21 @@ class CleanupModel:
             self.server.start()
 
     def clean(self, text: str, max_s: float, max_tokens: int | None = None, before: str = "",
-              app: str = "") -> tuple[Answer | None, bool]:
+              app: str = "", alternatives: list[str] = ()) -> tuple[Answer | None, bool]:
         """(the parsed answer or None if it isn't valid JSON, cut_off: it hit the token cap). `before` is what was
-        typed earlier in this dictation, `app` the kind of app in front: the prompt's "Before" and "App"."""
+        typed earlier in this dictation, `app` the kind of app in front, `alternatives` Whisper's other hearings: the
+        prompt's "Before", "App" and "Other hearings" (the Rewriter doesn't pass other hearings yet).
+        The answer is marked uncertain when the model gave a content word under UNSURE_BELOW (see weakest_word)."""
         n = max_tokens or min(900, 64 + 4 * len(text.split()))   # the JSON repeats the text, maybe twice
-        r = self.server.complete(build_prompt(text, self.words, app=app, before=before, prompt=self._prompt), n, max_s)
+        prompt = build_prompt(text, self.words, app=app, before=before, alternatives=alternatives, prompt=self._prompt)
+        r = self.server.complete(prompt, n, max_s, n_probs=1)
         cut_off = r.get("stop_type") == "limit" or bool(r.get("truncated"))
-        return parse_answer(r.get("content", "")), cut_off
+        answer = parse_answer(r.get("content", ""))
+        if answer is not None:
+            weak = weakest_word(r.get("completion_probabilities") or [])
+            if weak is not None and weak[1] < UNSURE_BELOW:
+                answer.weak_word, answer.uncertain = weak[0], True
+        return answer, cut_off
 
     def stop(self) -> None:
         self.server.stop()

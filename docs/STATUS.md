@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-10 22:25 (clean-up model chat: confidence test done; GPU free). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-11 18:50 (clean-up model chat: unsure flag built into the app; GPU free). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
@@ -17,6 +17,7 @@ Last updated: 2026-11-10 22:25 (clean-up model chat: confidence test done; GPU f
 
 ## Done recently
 
+- 2026-11-11: the unsure flag is in the app. `CleanupModel.clean()` asks llama-server for word probabilities and marks the answer unsure when a content word is under 0.8 (llamacpp backend only, no contract change). The app's code path on dev gives the same answers and flags as the eval (67 of 67; median request 313 ms with probabilities). 1,178 tests pass. Found on the way: the app never sends Whisper's other hearings to the model (see Next 5b).
 - 2026-11-10: the model's own word confidence flags most of its wrong guesses. The model gives all its wrong answers as sure (54 of 54 on the test). A cut-off of 0.8 on content words catches 33 of them, 18 of the 20 that change the meaning (the guard blocks one more), and flags 5.3% of right answers (big1: 40 of 59, 5.0%). On dev it flags 16 to 21% of right answers (phrasing choices in broken sentences). It costs about 23 ms per sentence. The runner-up word as a second reading is right for only 8 of 36. `eval/dictation_cleanup/reviews/2026-11-10_confidence_flag.md`, tool `eval/dictation_cleanup/confidence.py`.
 - 2026-11-06 night: big3s16lr1ep (one epoch, 84 min) and big3s16lr5 (learning rate 5e-5, 168 min) both tie big3s16lr: test 2,445 and 2,447 (both epochs) vs 2,446, fair 2,301 cases 2,280 and 2,283 vs 2,281, head to head 4-5 and 4-2 (p 1.00, 0.69). Lowest losses on new data of any run (test cases 0.0170, 0.0169 vs 0.0192), but no higher score. Dev 62 and 63 vs 65 (a dropped "not", one more silent guess, "Hawthorne"; the guard blocks them). Settings settled; candidate unchanged. `eval/dictation_cleanup/reviews/2026-11-06_big3s16lr1ep_and_lr5.md`.
 - 2026-11-05 night: big3lr epoch 1 (big3's 24,000 at rank 16 and 1e-4; only epoch 1 exists, because of the restart) ties big1: test 2,439 vs 2,441, fair 2,301 cases 2,275 (7 wins, 7 losses), and stays a little behind big3s16lr epoch 1 (2,446; fair 3 wins, 9 losses). Far ahead of big3, the same data at the old settings (2,395; 28 to 3). Clean changed 7 vs 4, dev 65. `eval/dictation_cleanup/reviews/2026-11-05_big3lr.md`.
@@ -54,13 +55,14 @@ Last updated: 2026-11-10 22:25 (clean-up model chat: confidence test done; GPU f
 3. Try big1 in the demo with camera and mic (`"rewrite_backend": "llamacpp"` in config.local.json, preflight, run_demo); then decide whether llamacpp becomes the default.
 4. A plan for many more different sentences (toward 100,000 examples): source, licence, cost.
 5. Decide whether the guard rejects numbers from sound-alike words (dev M01 and M02 expect them fixed).
-5b. Proposed (needs Khang's OK): the "unsure" flag from the model's word confidence in the app. In `CleanupModel.clean()`, mark the answer unsure when a content word is under 0.8 (no contract change). Check it on the hidden test. Later: send the weak word so the card highlights it.
+5b. Send Whisper's other hearings to the clean-up. The model was trained and scored with "Other hearings", but the Rewriter always sends "(none)". On dev without them (big1, 2026-11-11), 7 cases that come out unsure with them come out sure ("bank" or "bench"), and 6 answers change. `CleanupModel.clean(alternatives=...)` takes them. Still needed: Whisper's other hearings from dictation.py (Dictation chat), the rewrite request (contract: Khang's OK, website copy), and rewrite.py passing them (shared). Later: send the weak word so the card highlights it.
 6. Rename, once the exact name is given.
 7. Light models for weak laptops (Qwen3.5-2B, 0.8B; Q4_K_M or llama.cpp's CPU build), timed on a low-end laptop.
 
 ## Blockers and risks
 
 - Dev is tuned on and the holdout is spent: only the fresh hidden set gives a number to trust. The 2,500-case test comes from the same generator as the training data.
+- D: (this repo, the model files) is a USB drive (Transcend StoreJet). On 2026-11-11 the first llama-server start timed out at the app's 120 s limit; the next one took a few seconds. Cause not measured (likely the first read of the 4.5 GB file over USB, maybe the antivirus scan). Before a demo, start the engine once early, or put the GGUF on the internal SSD.
 - A restart kills a training run, and the trainer can't resume (only per-epoch adapters are saved). No installers or Windows restarts while a chain runs; Windows Update's active hours end at 02:00.
 - The test cases were invented, not taken from real users. Real users or a speech-language pathologist should review them later.
 - For a lawyer: training on Claude-written sentences (Anthropic's terms forbid it only for competing products; Khang's reading: we don't compete); shipping NVIDIA's CUDA runtime DLLs with llama.cpp; PyAV stays in training only; the licence for new private code; IP agreements with everyone who wrote code.
@@ -70,7 +72,7 @@ Last updated: 2026-11-10 22:25 (clean-up model chat: confidence test done; GPU f
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: the 2026-11-06 09:10 wrap-up. Everything up to 4577341 is on origin.
+- Not pushed: everything after 4577341 (the 2026-11-06 wrap-up, the Dictation chat's first two commits, and the clean-up chat's confidence test and unsure flag).
 - Disk: each training run keeps about 20 GB (one epoch) or 40 GB (two) in `checkpoints/cleanup/<name>/`; its `merged*/` folders and bf16 GGUFs can be rebuilt with export.py and deleted. D: had 771 GB free on 2026-11-06.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.

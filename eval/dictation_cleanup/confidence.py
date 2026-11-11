@@ -31,38 +31,17 @@ import sys
 import time
 from pathlib import Path
 
+from engine.voice.cleanup_model import SMALL_WORDS as SMALL, text_span, weakest_word   # what the app ships
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "eval" / "dictation_cleanup" / "runs" / "confidence"
 TEST_FILE = ROOT / "data" / "cleanup_train" / "big1_test.csv"
 WORD = re.compile(r"[\w'’]+")
-# Small words whose choice rarely changes the meaning. Negations, numbers and names are deliberately NOT here.
-SMALL = set("""a an the my your his her its our their this that these those i you he she it we they me him us them
-and or but so to of in on at for with from by as is are was were be been am do does did has have had will would
-can could should please just also then there here what who which when where how if up out about into over than
-i'm it's i'll we'd i'd you're that's let's""".split())
 THRESHOLDS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
 
 
 def norm(word: str) -> str:
     return word.lower().replace("’", "'").strip("'")
-
-
-def text_span(raw: bytes) -> tuple[int, int] | None:
-    """Byte range of the "text" value inside the model's JSON answer, or None."""
-    key = b'"text": "'
-    s = raw.find(key)
-    if s < 0:
-        return None
-    s += len(key)
-    i = s
-    while i < len(raw):
-        if raw[i:i + 1] == b"\\":
-            i += 2
-            continue
-        if raw[i:i + 1] == b'"':
-            break
-        i += 1
-    return s, i
 
 
 def signals(toks: list[dict], asr_best: str) -> dict:
@@ -85,16 +64,15 @@ def signals(toks: list[dict], asr_best: str) -> dict:
             char_b.append(char_b[-1] + len(ch.encode("utf-8")))
         heard = {norm(w) for w in WORD.findall(asr_best)}
         for m in WORD.finditer(text):
+            if norm(m.group()) in heard:
+                continue
             b0, b1 = s + char_b[m.start()], s + char_b[m.end()]
-            inside = [i for i in in_text if starts[i] < b1 and starts[i] + len(toks[i]["b"]) > b0]
-            if norm(m.group()) not in heard:
-                for i in inside:
-                    if toks[i]["lp"] < out["changed"]:
-                        out["changed"], out["weak"] = toks[i]["lp"], m.group()
-            if norm(m.group()) not in SMALL:
-                for i in inside:
-                    if re.search(r"\w", bytes(toks[i]["b"]).decode("utf-8", "replace")) and toks[i]["lp"] < out["content"]:
-                        out["content"], out["cweak"] = toks[i]["lp"], m.group()
+            for i in in_text:
+                if starts[i] < b1 and starts[i] + len(toks[i]["b"]) > b0 and toks[i]["lp"] < out["changed"]:
+                    out["changed"], out["weak"] = toks[i]["lp"], m.group()
+        weak = weakest_word([{"bytes": t["b"], "logprob": t["lp"]} for t in toks])   # the app's own function
+        if weak is not None and weak[1] < 1.0:
+            out["content"], out["cweak"] = math.log(weak[1]), weak[0]
     key = b'"uncertain": '
     k = raw.find(key)
     if k >= 0:

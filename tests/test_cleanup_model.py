@@ -1,12 +1,14 @@
 """Run with: python -m unittest tests.test_cleanup_model  (the trained clean-up model in the app: the prompt,
 the answer, llama-server's handling, the Rewriter's llamacpp backend and its guard; no GPU, no server)"""
 import json
+import math
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 from engine.voice import cleanup_model, rewrite
-from engine.voice.cleanup_model import Answer, CleanupModel, LlamaServer, build_prompt, chat_text, parse_answer
+from engine.voice.cleanup_model import (Answer, CleanupModel, LlamaServer, build_prompt, chat_text, parse_answer,
+                                        weakest_word)
 from engine.voice.rewrite import Rewriter, check_cleanup
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -313,6 +315,113 @@ class TestCleanupGuard(unittest.TestCase):
         self.assertIn("content dropped", check_cleanup(heard, "How about a picnic at the park if it's sunny?"))
         self.assertIn("content dropped", check_cleanup("my insurance will cover the repair after the deductible",
                                                        "Can you check the tire pressure on the van?"))
+
+
+def probs(*parts):
+    """llama-server's completion_probabilities for an answer whose text is made of (piece, probability) parts."""
+    pieces = [('{"', 1.0), ("text", 1.0), ('": "', 1.0), *parts, ('", "alternatives": [], "uncertain": false}', 1.0)]
+    return [{"id": n, "token": p, "bytes": list(p.encode("utf-8")), "logprob": math.log(q)}
+            for n, (p, q) in enumerate(pieces)]
+
+
+def content_of(parts):
+    return "".join(p for p, _ in parts)
+
+
+class StubServer:
+    """Stands in for LlamaServer: one reply, and what was asked."""
+
+    def __init__(self, parts):
+        self.parts, self.asked, self.prompts = parts, [], []
+
+    @property
+    def running(self):
+        return True
+
+    def complete(self, prompt, n_predict, timeout_s, sampling=None, n_probs=0):
+        self.asked.append(n_probs)
+        self.prompts.append(prompt)
+        toks = probs(*self.parts)
+        return {"content": "".join(bytes(t["bytes"]).decode() for t in toks), "stop_type": "eos",
+                "completion_probabilities": toks}
+
+
+class TestOwnDoubt(unittest.TestCase):
+    """The model's own word probabilities mark an answer unsure (cleanup_model.weakest_word, UNSURE_BELOW)."""
+
+    def test_the_least_sure_content_word(self):
+        toks = probs(("The", 1.0), (" hard", 0.3), ("ware", 0.9), (" test", 0.95), (".", 0.2))
+        word, p = weakest_word(toks)
+        self.assertEqual(word, "hardware")              # a word is as sure as its least sure token
+        self.assertAlmostEqual(p, 0.3)
+
+    def test_small_words_and_punctuation_do_not_count(self):
+        toks = probs(("My", 0.4), (" dog", 0.99), (" ate", 1.0), ("!", 0.3))
+        self.assertEqual(weakest_word(toks)[0], "dog")
+        self.assertGreater(weakest_word(toks)[1], cleanup_model.UNSURE_BELOW)
+
+    def test_a_negation_counts(self):
+        word, p = weakest_word(probs(("I", 1.0), (" can't", 0.5), (" go", 1.0)))
+        self.assertEqual((word, round(p, 3)), ("can't", 0.5))
+
+    def test_no_text_no_word(self):
+        self.assertIsNone(weakest_word([]))
+        self.assertIsNone(weakest_word(probs(("The", 0.5), ("!", 0.5))))
+
+    def test_an_unsure_word_marks_the_answer_unsure(self):
+        parts = [("The", 1.0), (" hardware", 0.16), (" test", 1.0), (" came", 1.0), (" back", 1.0), (".", 1.0)]
+        model = CleanupModel(StubServer(parts))
+        answer, cut_off = model.clean("the hard worm test came back", max_s=3.0)
+        self.assertEqual(answer.text, content_of(parts))
+        self.assertTrue(answer.uncertain)
+        self.assertEqual(answer.weak_word, "hardware")
+        self.assertEqual(model.server.asked, [1])          # it asked for the probabilities
+        self.assertFalse(cut_off)
+
+    def test_a_sure_answer_stays_sure(self):
+        model = CleanupModel(StubServer([("Send", 0.99), (" the", 0.4), (" picture", 0.95), (".", 0.3)]))
+        answer, _ = model.clean("send the pitcher", max_s=3.0)
+        self.assertFalse(answer.uncertain)
+        self.assertEqual(answer.weak_word, "")
+
+    def test_other_hearings_reach_the_prompt(self):
+        model = CleanupModel(StubServer([("Meet", 1.0), (" me", 1.0), (" at", 1.0), (" the", 1.0), (" bank", 1.0)]))
+        model.clean("can you meet me at the bank", max_s=3.0, alternatives=["can you meet me at the bench", " "])
+        self.assertIn("Other hearings: can you meet me at the bench\n", model.server.prompts[0])
+        model.clean("can you meet me at the bank", max_s=3.0)
+        self.assertIn("Other hearings: (none)\n", model.server.prompts[1])
+
+    def test_no_probabilities_leaves_the_answer_as_the_model_wrote_it(self):
+        class Old(StubServer):
+            def complete(self, *a, **kw):
+                r = super().complete(*a, **kw)
+                del r["completion_probabilities"]
+                return r
+
+        answer, _ = CleanupModel(Old([("Hi", 0.1)])).clean("hi", max_s=3.0)
+        self.assertFalse(answer.uncertain)
+
+    def test_the_card_gets_the_flag_through_the_rewriter(self):
+        model = CleanupModel(StubServer([("Can", 1.0), (" you", 1.0), (" cook", 1.0), (" the", 1.0),
+                                         (" kidney", 0.63), ("?", 1.0)]))
+        settings = SimpleNamespace(rewrite_backend="llamacpp", rewrite_gguf="m.gguf", rewrite_words="",
+                                   rewrite_max_s=3.0, refine_max_s=15.0)
+        rw = Rewriter(settings, cleanup=model, log=lambda *a: None)
+        r = rw.rewrite_full("can you cook the keen wa")
+        self.assertTrue(r.used)
+        self.assertTrue(r.uncertain)
+
+    def test_the_server_sends_n_probs_only_when_asked(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = TestServer.server(self, Path(tmp))
+            s.start()
+            s.complete("prompt", 64, 3.0)
+            s.complete("prompt", 64, 3.0, n_probs=1)
+            first, second = (json.loads(r.data) for r in s._http.requests[-2:])
+            self.assertNotIn("n_probs", first)
+            self.assertEqual(second["n_probs"], 1)
 
 
 if __name__ == "__main__":
