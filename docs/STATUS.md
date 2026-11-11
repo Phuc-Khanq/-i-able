@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-06 09:10 (the night's results pushed; another project is training on the GPU). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-10 22:25 (clean-up model chat: confidence test done; GPU free). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
@@ -11,12 +11,13 @@ Last updated: 2026-11-06 09:10 (the night's results pushed; another project is t
 
 ## Code chats now (rules: CLAUDE.md, "Two Code chats at once")
 
-- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: none (night chain 3 ended 2026-11-06 05:13). Since 07:23 on 11-06 a training run from another project (DigiErhu, its own folder) holds about 9.9 GB: check `nvidia-smi` before any GPU job here.
+- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: none (the confidence test ended 2026-11-10 22:20). Another project on this PC (DigiErhu, its own folder) sometimes trains on the GPU: check `nvidia-smi` before any GPU job here.
 - **Dictation chat** ("Dictation" in `ListAgents`, since 2026-11-06): the dictation path from mic to typed text, except the clean-up model: mic and voice detection, Whisper and how well it hears our users, commands vs dictation, the dictation card, confirm/drop. Owns `engine/voice/` audio_in, mic, dictation, commands, command_list, personal_commands, launch, voice_data, live_check, whisper_bench, whisper_import, command_bench, `finetune/`; `engine/eyes/dictation_card.py`; `engine/core/mode_manager.py` (message the clean-up chat before changing how it calls the Rewriter); their tests. GPU: none so far; Whisper runs only after checking "In progress" and `nvidia-smi`.
 - Shared, message first: `engine/voice/rewrite.py` (the trained model needs its exact prompt), `engine/voice/voice_check.py`, `engine/config.py`, the contracts. Both chats work on `voice-cleanup-app`. A training or scoring chain imports these and `eval/` at every step: no changes to them while one runs.
 
 ## Done recently
 
+- 2026-11-10: the model's own word confidence flags most of its wrong guesses. The model gives all its wrong answers as sure (54 of 54 on the test). A cut-off of 0.8 on content words catches 33 of them, 18 of the 20 that change the meaning (the guard blocks one more), and flags 5.3% of right answers (big1: 40 of 59, 5.0%). On dev it flags 16 to 21% of right answers (phrasing choices in broken sentences). It costs about 23 ms per sentence. The runner-up word as a second reading is right for only 8 of 36. `eval/dictation_cleanup/reviews/2026-11-10_confidence_flag.md`, tool `eval/dictation_cleanup/confidence.py`.
 - 2026-11-06 night: big3s16lr1ep (one epoch, 84 min) and big3s16lr5 (learning rate 5e-5, 168 min) both tie big3s16lr: test 2,445 and 2,447 (both epochs) vs 2,446, fair 2,301 cases 2,280 and 2,283 vs 2,281, head to head 4-5 and 4-2 (p 1.00, 0.69). Lowest losses on new data of any run (test cases 0.0170, 0.0169 vs 0.0192), but no higher score. Dev 62 and 63 vs 65 (a dropped "not", one more silent guess, "Hawthorne"; the guard blocks them). Settings settled; candidate unchanged. `eval/dictation_cleanup/reviews/2026-11-06_big3s16lr1ep_and_lr5.md`.
 - 2026-11-05 night: big3lr epoch 1 (big3's 24,000 at rank 16 and 1e-4; only epoch 1 exists, because of the restart) ties big1: test 2,439 vs 2,441, fair 2,301 cases 2,275 (7 wins, 7 losses), and stays a little behind big3s16lr epoch 1 (2,446; fair 3 wins, 9 losses). Far ahead of big3, the same data at the old settings (2,395; 28 to 3). Clean changed 7 vs 4, dev 65. `eval/dictation_cleanup/reviews/2026-11-05_big3lr.md`.
 - 2026-11-05 evening: two Code chats can share this folder (rules in CLAUDE.md, "Code chats now" above, /start and /wrap-up know about it). The first night chain was stopped at 22:27 when the Kaspersky installer restarted Windows: big3lr died at step 3,163 of 5,698, its epoch-1 adapter survived. Its test-case loss at steps 1,500 and 2,500 (0.0173, 0.0176) was the lowest of any run, but swings up to 0.006 between checks. Slides brief: `docs/cleanup_progress_for_slides.md`.
@@ -44,7 +45,7 @@ Last updated: 2026-11-06 09:10 (the night's results pushed; another project is t
 
 ## In progress
 
-- Nothing from this repo. The GPU is busy with another project's training (see "Code chats now").
+- Nothing from the clean-up model chat (the confidence test ended 2026-11-10 22:20; GPU free).
 
 ## Next
 
@@ -53,6 +54,7 @@ Last updated: 2026-11-06 09:10 (the night's results pushed; another project is t
 3. Try big1 in the demo with camera and mic (`"rewrite_backend": "llamacpp"` in config.local.json, preflight, run_demo); then decide whether llamacpp becomes the default.
 4. A plan for many more different sentences (toward 100,000 examples): source, licence, cost.
 5. Decide whether the guard rejects numbers from sound-alike words (dev M01 and M02 expect them fixed).
+5b. Proposed (needs Khang's OK): the "unsure" flag from the model's word confidence in the app. In `CleanupModel.clean()`, mark the answer unsure when a content word is under 0.8 (no contract change). Check it on the hidden test. Later: send the weak word so the card highlights it.
 6. Rename, once the exact name is given.
 7. Light models for weak laptops (Qwen3.5-2B, 0.8B; Q4_K_M or llama.cpp's CPU build), timed on a low-end laptop.
 
@@ -75,7 +77,6 @@ Last updated: 2026-11-06 09:10 (the night's results pushed; another project is t
 
 ## Ideas (not scheduled)
 
-- Use the model's own token probabilities (llama.cpp can report them) to mark an answer unsure.
 - Cheap training tests: more LoRA dropout; a heavier loss weight on the words that change.
 - Let the trainer resume after a restart (save the optimizer state with each check).
 - Show the raw transcript in the preview while the clean-up runs.
