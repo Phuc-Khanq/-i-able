@@ -1,5 +1,61 @@
 # Session log (newest first)
 
+## 2026-11-12 15:01 [Dictation]: Voice fixes, spell-it, the word list, and the dysarthria simulator (stopped: it fails)
+Branch: voice-cleanup-app · Commits: 8fd59f3 voice: fix words on the dictation card by voice; 7ac3a8f docs: add the Dictation chat to Code chats now; b71333c voice: spell a word letter by letter, and a personal word list Whisper leans toward; c33c11b voice: dysarthria simulator experiment (kept as a record; it failed the bar); 7cde0e0 docs: stop the dysarthria simulator; plus this wrap-up. All but the wrap-up pushed to origin (Khang's OK) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:**
+- Fix words on the card by voice ("change X to Y", "delete X", "scratch that"); spell a word ("spell H A T H A W A Y", "capital", "double", "all caps"); a personal word list ("add <word> to my words") that Whisper uses as hotwords from the next sentence.
+- Searched for dysarthric speech data we may sell with: none open. Drafted the Speech Accessibility Project proposal (Claude Doc https://claude.ai/artifact/SdxuomVgQfoY3paCui9Bzv, blanks for Khang).
+- Built a dysarthria simulator on LibriSpeech (CC BY 4.0), made it harder (v2), and ran the overnight experiment: simulated vs clean training, scored on TORGO test speakers only.
+**Measured:** Khang's PC, RTX 5080, stock large-v3-turbo / LoRA r32 2,000 steps:
+- Simulator v2, stock Whisper, % words wrong on 120 dev-clean clips: clean 2.2, mild 4.5, moderate 20.0, severe 48.4 (v1: 2.3, 2.7, 6.7). 200 other clips: 4.8, 17.2, 50.1.
+- TORGO F04+M01 (801 clips), % words wrong: stock 41.8; clean control 39.3; simulated 44.5 (best-on-dev step 44.0). M01: 71.9 stock, 79.9 simulated. LibriSpeech test-clean: 1.92 stock, 1.81 simulated. Training 2.26 s a step.
+- Unit tests: 1,190 pass.
+**Decisions:** simulator v2 targets (2026-11-11); simulator stopped, get real dysarthric speech instead (2026-11-12). Both in DECISIONS.md.
+**Still running:** nothing. GPU free.
+**Problems / blockers:** none open. On the way: faster-whisper needed torch loaded first for cuBLAS (fixed in evaluate.py).
+**Next:**
+1. Khang sends the Speech Accessibility Project proposal; plan consented recordings of users.
+2. Next 5b: measure Whisper's top-3 hearings (how often they hold the right words, and the cost) before wiring them in.
+**Khang must do by hand:** try with the mic: "change X to Y", "spell H A T H A W A Y", "add that to my words" then say the name again; fill in and send the proposal; OK to delete the old simulator clips and converted test models (disk only); push this wrap-up.
+**For Cowork:** how to record consented users legally (consent form, storage, what a tester agrees to); whether scoring on TORGO as a company fits its licence (for the lawyer).
+**Notes from Khang:** none
+
+## 2026-11-12 15:00 [Clean-up model]: Unsure flag in the app, Whisper's other hearings planned, Hung's data task
+Branch: voice-cleanup-app · Commits: c8990c1 eval: the model's own word confidence flags most of its wrong guesses; d115eb9 voice: the trained clean-up marks its answer unsure when a content word is under 0.8; e78a89a voice: the clean-up passes Whisper's other hearings from the rewrite request to the model; f26eafe docs: Hung's task is now writing training phrases himself; 2c19793 docs: Hung writes the hidden test, 500 training phrases and word lists by hand; plus this wrap-up. All but this wrap-up are on origin · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
+**Done:**
+- Gave Khang the `/start` prompt for the new Dictation chat (it exists now).
+- Measured the model's own word confidence as an unsure flag, then built it into the app: `CleanupModel.clean()` asks llama-server for word probabilities, and the card says "Check this" when a content word is under 0.8.
+- Found that the app never sent Whisper's other hearings to the model. Wrote the plan with Khang's OK (`docs/cleanup_hearings_plan.md`) and did the clean-up side: an optional "hearings" field in `topics.py` (inside the engine only) and `rewrite.py` passing it to the model.
+- Wrote Hung's task as a Claude Docs doc and revised it twice with Khang: https://claude.ai/artifact/LsBqWiHwbnyAPRqLgkYatN
+- Pushed the 6 commits after 4577341 with Khang's OK.
+**Measured (Khang's PC, RTX 5080, llama.cpp b11960 Q8_0, greedy):**
+- All 54 of big3s16lr epoch 1's wrong answers on the 2,500 test cases come out as sure.
+- A 0.8 cut-off on content words catches 33 of them, including 18 of the 20 that change the meaning. It flags 5.3% of right answers (big1: 5.0%), and 16 to 21% on dev.
+- The probabilities cost about 23 ms a sentence. The runner-up word is right for only 8 of 36.
+- The app's own code path on the 67 dev cases gives the same answers and flags as the eval, 67 of 67 (median request 313 ms).
+- Without other hearings (big1, dev): 7 cases that come out unsure with them come out sure, and 6 answers change.
+- 1,185 tests pass.
+**Decisions:** all recorded in DECISIONS.md, 2026-11-11.
+- The unsure flag, at 0.8.
+- Other hearings go to the clean-up only after a measurement says they help.
+- Hung writes the hidden test (35), 500 training phrases and a word list per group, by hand, with no AI tools and no outreach.
+**Still running:** nothing (GPU 656 MiB, 6% at 15:01).
+**Problems / blockers:**
+- Messages to the Dictation chat were held and expired undelivered twice, probably because the two chats run in different permission modes. The hand-over is in `docs/cleanup_hearings_plan.md` instead.
+- D: is a USB drive. The first llama-server start once timed out at the app's 120 s limit.
+**Next:**
+1. Dictation chat: step 0 of the hearings plan (Whisper's top 3 hearings and their cost). Then the clean-up chat compares the clean-up with and without them.
+2. When Hung's 35 hidden-test phrases come in: turn them into cases and run the candidate once.
+3. Turn Hung's phrases into training data, and test them with a one-epoch run.
+**Khang must do by hand:**
+- Share Hung's doc with him.
+- Start the Dictation chat on the hearings plan.
+- Yes or no to big3s16lr epoch 1 as the candidate.
+- Try the trained model with camera and mic, and check that "Check this" shows.
+- Push this wrap-up.
+**For Cowork:** none
+**Notes from Khang:** none
+
 ## 2026-11-06 09:10 [Clean-up model]: Pushed the night's results; the GPU is now busy with another project
 Branch: voice-cleanup-app · Commits: none besides this wrap-up; pushed 343d50a, 72268c2, 7a7c5dc and 4577341 to origin (Khang's OK) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:** pushed the night's four commits to origin `voice-cleanup-app` (616427f..4577341): the big3lr review, the review of the one-epoch and 5e-5 runs, the slides brief with all results, and the 05:22 wrap-up. Nothing went to `public`.

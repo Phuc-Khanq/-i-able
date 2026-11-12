@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rewrite.py passes them; draft data task for Hung; GPU free). Session-by-session record: `docs/SESSION_LOG.md`.
+Last updated: 2026-11-12 15:00 (clean-up model chat wrap-up: unsure flag, hearings plan, Hung's data task; GPU free). Session-by-session record: `docs/SESSION_LOG.md`.
 
 ## Now
 
@@ -11,7 +11,7 @@ Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rew
 
 ## Code chats now (rules: CLAUDE.md, "Two Code chats at once")
 
-- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: none (the confidence test ended 2026-11-10 22:20). Another project on this PC (DigiErhu, its own folder) sometimes trains on the GPU: check `nvidia-smi` before any GPU job here.
+- **Clean-up model chat** ("Clean-up model" in `ListAgents`): trains and scores the clean-up model. Owns `engine/voice/cleanup_train/`, `eval/dictation_cleanup/`, `data/cleanup_train/`, `checkpoints/cleanup/`, `docs/cleanup_*.md`. GPU: none (checked 2026-11-12 15:01). Waits for the Dictation chat's hearings measurement and Hung's phrases. Another project on this PC (DigiErhu, its own folder) sometimes trains on the GPU: check `nvidia-smi` before any GPU job here.
 - **Dictation chat** ("Dictation" in `ListAgents`, since 2026-11-06): the dictation path from mic to typed text, except the clean-up model: mic and voice detection, Whisper and how well it hears our users, commands vs dictation, the dictation card, confirm/drop. Owns `engine/voice/` audio_in, mic, dictation, commands, command_list, personal_commands, launch, voice_data, live_check, whisper_bench, whisper_import, command_bench, `finetune/`; `engine/eyes/dictation_card.py`; `engine/core/mode_manager.py` (message the clean-up chat before changing how it calls the Rewriter); their tests. GPU: none so far; Whisper runs only after checking "In progress" and `nvidia-smi`.
 - Shared, message first: `engine/voice/rewrite.py` (the trained model needs its exact prompt), `engine/voice/voice_check.py`, `engine/config.py`, the contracts. Both chats work on `voice-cleanup-app`. A training or scoring chain imports these and `eval/` at every step: no changes to them while one runs.
 
@@ -19,6 +19,7 @@ Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rew
 
 - 2026-11-12 (Dictation chat): training Whisper on simulated dysarthric speech makes it worse on real dysarthric speech, so it fails the bar. TORGO test speakers F04 and M01 (801 clips), words wrong: stock 41.8%; 2,000 steps on clean LibriSpeech 39.3%; the same 2,000 steps on the same sentences simulated 44.5% (44.0% at its best-on-dev step 1,000). The simulated run gets better on mild F04 (15.6 to 13.6%) but worse on severe M01 (71.9 to 79.9%) and on TORGO sentences (27.5 to 33.4%). LibriSpeech test-clean holds (1.92% stock, 1.81% simulated). Scores in `checkpoints/sim/eval-*.json`, log `checkpoints/sim/chain.log`. One run each, two test speakers.
 - 2026-11-11 (Dictation chat): dysarthria simulator version 2. Version 1 was too easy for stock Whisper (2.3/2.7/6.7% of words wrong for mild/moderate/severe, 2.2% clean; TORGO about 41%). Version 2 adds slurred articulation, weak consonants and a nasal voice: 4.5/20.0/48.4% (120 clips; 4.8/17.2/50.1% on 200 others), mostly misheard words. Tool `engine/voice/finetune/calibrate_sim.py`; samples `data/voice/simulated/samples_v2/`. A 50-step training trial: 2.26 s a step, so about 80 min per run. Khang approved it; the runs are in the 2026-11-12 line.
+- 2026-11-11 (clean-up chat): `rewrite.py` passes a rewrite request's optional "hearings" (`topics.py`, inside the engine only) to the trained model as "Other hearings"; Whisper doesn't send them yet (Next 5b). 1,185 tests pass. Hung's data task agreed (Next 4).
 - 2026-11-11: the unsure flag is in the app. `CleanupModel.clean()` asks llama-server for word probabilities and marks the answer unsure when a content word is under 0.8 (llamacpp backend only, no contract change). The app's code path on dev gives the same answers and flags as the eval (67 of 67; median request 313 ms with probabilities). 1,178 tests pass. Found on the way: the app never sends Whisper's other hearings to the model (see Next 5b).
 - 2026-11-10: the model's own word confidence flags most of its wrong guesses. The model gives all its wrong answers as sure (54 of 54 on the test). A cut-off of 0.8 on content words catches 33 of them, 18 of the 20 that change the meaning (the guard blocks one more), and flags 5.3% of right answers (big1: 40 of 59, 5.0%). On dev it flags 16 to 21% of right answers (phrasing choices in broken sentences). It costs about 23 ms per sentence. The runner-up word as a second reading is right for only 8 of 36. `eval/dictation_cleanup/reviews/2026-11-10_confidence_flag.md`, tool `eval/dictation_cleanup/confidence.py`.
 - 2026-11-06 night: big3s16lr1ep (one epoch, 84 min) and big3s16lr5 (learning rate 5e-5, 168 min) both tie big3s16lr: test 2,445 and 2,447 (both epochs) vs 2,446, fair 2,301 cases 2,280 and 2,283 vs 2,281, head to head 4-5 and 4-2 (p 1.00, 0.69). Lowest losses on new data of any run (test cases 0.0170, 0.0169 vs 0.0192), but no higher score. Dev 62 and 63 vs 65 (a dropped "not", one more silent guess, "Hawthorne"; the guard blocks them). Settings settled; candidate unchanged. `eval/dictation_cleanup/reviews/2026-11-06_big3s16lr1ep_and_lr5.md`.
@@ -48,7 +49,7 @@ Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rew
 
 ## In progress
 
-- Nothing from the clean-up model chat (the confidence test ended 2026-11-10 22:20; GPU free).
+- Nothing from the clean-up model chat (GPU free, 2026-11-12 15:01).
 - Nothing from the Dictation chat (the simulated-dysarthria experiment ended 2026-11-12 03:40; GPU free).
 
 ## Next
@@ -76,7 +77,7 @@ Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rew
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: everything after 4577341 (the 2026-11-06 wrap-up, the Dictation chat's first two commits, and the clean-up chat's confidence test and unsure flag).
+- Not pushed: the clean-up chat's 2026-11-12 wrap-up (everything up to 7cde0e0 is on origin).
 - Disk: each training run keeps about 20 GB (one epoch) or 40 GB (two) in `checkpoints/cleanup/<name>/`; its `merged*/` folders and bf16 GGUFs can be rebuilt with export.py and deleted. D: had 771 GB free on 2026-11-06.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
 - `.git/info/exclude` hides every `*.md` except README/CONTRIBUTING, so new docs need `git add -f <file>`.
