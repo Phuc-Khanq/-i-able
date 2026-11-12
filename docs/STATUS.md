@@ -17,6 +17,8 @@ Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rew
 
 ## Done recently
 
+- 2026-11-12 (Dictation chat): training Whisper on simulated dysarthric speech makes it worse on real dysarthric speech, so it fails the bar. TORGO test speakers F04 and M01 (801 clips), words wrong: stock 41.8%; 2,000 steps on clean LibriSpeech 39.3%; the same 2,000 steps on the same sentences simulated 44.5% (44.0% at its best-on-dev step 1,000). The simulated run gets better on mild F04 (15.6 to 13.6%) but worse on severe M01 (71.9 to 79.9%) and on TORGO sentences (27.5 to 33.4%). LibriSpeech test-clean holds (1.92% stock, 1.81% simulated). Scores in `checkpoints/sim/eval-*.json`, log `checkpoints/sim/chain.log`. One run each, two test speakers.
+- 2026-11-11 (Dictation chat): dysarthria simulator version 2. Version 1 was too easy for stock Whisper (2.3/2.7/6.7% of words wrong for mild/moderate/severe, 2.2% clean; TORGO about 41%). Version 2 adds slurred articulation, weak consonants and a nasal voice: 4.5/20.0/48.4% (120 clips; 4.8/17.2/50.1% on 200 others), mostly misheard words. Tool `engine/voice/finetune/calibrate_sim.py`; samples `data/voice/simulated/samples_v2/`. A 50-step training trial: 2.26 s a step, so about 80 min per run. Khang approved it; the runs are in the 2026-11-12 line.
 - 2026-11-11: the unsure flag is in the app. `CleanupModel.clean()` asks llama-server for word probabilities and marks the answer unsure when a content word is under 0.8 (llamacpp backend only, no contract change). The app's code path on dev gives the same answers and flags as the eval (67 of 67; median request 313 ms with probabilities). 1,178 tests pass. Found on the way: the app never sends Whisper's other hearings to the model (see Next 5b).
 - 2026-11-10: the model's own word confidence flags most of its wrong guesses. The model gives all its wrong answers as sure (54 of 54 on the test). A cut-off of 0.8 on content words catches 33 of them, 18 of the 20 that change the meaning (the guard blocks one more), and flags 5.3% of right answers (big1: 40 of 59, 5.0%). On dev it flags 16 to 21% of right answers (phrasing choices in broken sentences). It costs about 23 ms per sentence. The runner-up word as a second reading is right for only 8 of 36. `eval/dictation_cleanup/reviews/2026-11-10_confidence_flag.md`, tool `eval/dictation_cleanup/confidence.py`.
 - 2026-11-06 night: big3s16lr1ep (one epoch, 84 min) and big3s16lr5 (learning rate 5e-5, 168 min) both tie big3s16lr: test 2,445 and 2,447 (both epochs) vs 2,446, fair 2,301 cases 2,280 and 2,283 vs 2,281, head to head 4-5 and 4-2 (p 1.00, 0.69). Lowest losses on new data of any run (test cases 0.0170, 0.0169 vs 0.0192), but no higher score. Dev 62 and 63 vs 65 (a dropped "not", one more silent guess, "Hawthorne"; the guard blocks them). Settings settled; candidate unchanged. `eval/dictation_cleanup/reviews/2026-11-06_big3s16lr1ep_and_lr5.md`.
@@ -47,6 +49,7 @@ Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rew
 ## In progress
 
 - Nothing from the clean-up model chat (the confidence test ended 2026-11-10 22:20; GPU free).
+- Nothing from the Dictation chat (the simulated-dysarthria experiment ended 2026-11-12 03:40; GPU free).
 
 ## Next
 
@@ -58,6 +61,7 @@ Last updated: 2026-11-11 21:20 (clean-up model chat: hearings plan approved, rew
 5b. Send Whisper's other hearings to the clean-up. The model was trained and scored with "Other hearings", but the Rewriter always sends "(none)". On dev without them (big1, 2026-11-11), 7 cases that come out unsure with them come out sure ("bank" or "bench"), and 6 answers change. Plan approved by Khang 2026-11-11: `docs/cleanup_hearings_plan.md`. Done: topics.py's optional "hearings" field (inside the engine only) and rewrite.py passing it to the model. **For the Dictation chat:** step 0 (measure Whisper's top 3 hearings and their cost first), then dictation.py and mode_manager.py. Whisper runs greedy today, so there are no other hearings yet. Later: send the weak word so the card highlights it.
 6. Rename, once the exact name is given.
 7. Light models for weak laptops (Qwen3.5-2B, 0.8B; Q4_K_M or llama.cpp's CPU build), timed on a low-end laptop.
+8. Real dysarthric speech for Whisper (the simulator is stopped, DECISIONS 2026-11-12): Khang fills the blanks in the Speech Accessibility Project proposal and sends it; plan how to record consented users. Old simulator clips (`data/voice/simulated/` v1 folders) and the converted test models in `checkpoints/sim-*/ct2*` can be deleted to free disk, with Khang's OK.
 
 ## Blockers and risks
 
