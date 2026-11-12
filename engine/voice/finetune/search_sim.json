@@ -1,0 +1,11 @@
+{
+  "_note": "The simulated-dysarthria test (prepare_sim.py, docs/DECISIONS.md 2026-11-10). Two runs, identical except the training audio: the same LibriSpeech sentences clean (control) or simulated (sim). Both pick checkpoints on simulated dev clips; TORGO is test only. A large patience keeps both on the same schedule. Any field left out uses the default in train.py.",
+  "configs": [
+    {"name": "sim-control", "manifest": "sim", "main_sources": ["sim_clean"], "typical_sources": ["librispeech"],
+     "dev_main_groups": ["sim"], "lora_r": 32, "lora_alpha": 64, "lr": 1e-4, "typical_mix": 0.25,
+     "max_steps": 2000, "patience": 1000},
+    {"name": "sim-dys", "manifest": "sim", "main_sources": ["sim"], "typical_sources": ["librispeech"],
+     "dev_main_groups": ["sim"], "lora_r": 32, "lora_alpha": 64, "lr": 1e-4, "typical_mix": 0.25,
+     "max_steps": 2000, "patience": 1000}
+  ]
+}

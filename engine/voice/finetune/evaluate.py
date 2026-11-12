@@ -59,9 +59,10 @@ class CT2Backend:
 
     def __init__(self, model: str, device: str, compute_type: str) -> None:
         common.preload_cuda12_libs()
-        from faster_whisper import WhisperModel  # heavy: import only when used
+        from engine.voice.dictation import Dictation, load_torch_first, resolve_model, words_to_text
 
-        from engine.voice.dictation import Dictation, resolve_model, words_to_text
+        load_torch_first(device)                 # Windows: torch's cuBLAS DLLs first, as the app does
+        from faster_whisper import WhisperModel  # heavy: import only when used
 
         self.label = resolve_model(model)
         self._dictation = Dictation(model=WhisperModel(self.label, device=device,
@@ -148,7 +149,8 @@ def print_table(result: dict, log) -> None:
 def run(args, log=None) -> dict:
     log = log or common.Log()
     data_dir = Path(args.data_dir)
-    clips = [c for c in common.read_manifest(common.manifest_path(data_dir, args.tiny))
+    manifest = getattr(args, "manifest", "all")
+    clips = [c for c in common.read_manifest(common.manifest_path(data_dir, args.tiny, manifest))
              if c.split == args.split]
     if args.groups:
         clips = [c for c in clips if c.group in args.groups]
@@ -212,6 +214,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=None,
                         help="faster-whisper model name or folder (default large-v3-turbo; tiny with --tiny)")
     parser.add_argument("--split", default="test", choices=["test", "dev", "train"])
+    parser.add_argument("--manifest", default="all",
+                        help="all (prepare.py) or sim (prepare_sim.py: simulated speech, TORGO test only)")
     parser.add_argument("--device", default="auto", help="auto, cuda or cpu")
     parser.add_argument("--compute-type", default=None, help="default float16 on cuda, int8 on cpu")
     parser.add_argument("--backend", default="ct2", choices=["ct2", "hf"],

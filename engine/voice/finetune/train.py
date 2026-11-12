@@ -72,6 +72,13 @@ class TrainConfig:
     grad_checkpointing: bool = True   # saves GPU memory; also on in --tiny so the CPU test covers it
     num_workers: int = 2
     device: str = "auto"
+    # Which data trains it. Defaults: TORGO + the personal pack, with LibriSpeech mixed in (prepare.py's all.csv).
+    # The simulated-dysarthria test (prepare_sim.py, sim.csv) trains on "sim" or, as its control, "sim_clean",
+    # and picks checkpoints on the simulated dev clips: TORGO is in sim.csv's test split only.
+    manifest: str = "all"
+    main_sources: list = field(default_factory=lambda: ["torgo", "personal"])
+    typical_sources: list = field(default_factory=lambda: ["librispeech"])
+    dev_main_groups: list = field(default_factory=lambda: list(common.DYS_GROUPS))
     tiny: bool = False
 
     @classmethod
@@ -214,16 +221,18 @@ class Trainer:
 
     # ............................................................... setup
     def _clips(self):
-        clips = common.read_manifest(common.manifest_path(self.data_dir, self.cfg.tiny))
+        cfg = self.cfg
+        clips = common.read_manifest(common.manifest_path(self.data_dir, cfg.tiny, cfg.manifest))
         train = [c for c in clips if c.split == "train"]
-        main = [c for c in train if c.source in ("torgo", "personal")]
-        main += [c for c in train if c.source == "personal"] * max(0, int(self.cfg.personal_repeat) - 1)
-        typical = [c for c in train if c.source == "librispeech"]
+        main = [c for c in train if c.source in cfg.main_sources]
+        if "personal" in cfg.main_sources:
+            main += [c for c in train if c.source == "personal"] * max(0, int(cfg.personal_repeat) - 1)
+        typical = [c for c in train if c.source in cfg.typical_sources]
         if not main:                       # tiny smoke test: LibriSpeech only
             main, typical = typical, typical
         dev = [c for c in clips if c.split == "dev"]
-        dev_dys = [c for c in dev if c.group in common.DYS_GROUPS][: self.cfg.dev_max_dys]
-        dev_typ = [c for c in dev if c.source == "librispeech"][: self.cfg.dev_max_typical]
+        dev_dys = [c for c in dev if c.group in cfg.dev_main_groups][: cfg.dev_max_dys]
+        dev_typ = [c for c in dev if c.source == "librispeech"][: cfg.dev_max_typical]
         return main, typical, dev_dys, dev_typ
 
     def setup(self) -> None:

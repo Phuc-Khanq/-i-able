@@ -40,6 +40,12 @@ PARTS = {
     "librispeech-test-clean": ([m.format("test-clean") for m in LIBRI_MIRRORS], "test-clean.tar.gz", 0.36e9),
 }
 TINY_PARTS = ["librispeech-test-clean"]
+# Only on request (--train-clean-100): the clear speech prepare_sim.py makes dysarthric. CC BY 4.0, openslr.org/12.
+EXTRA_PARTS = {
+    "librispeech-train-clean-100": ([m.format("train-clean-100") for m in LIBRI_MIRRORS], "train-clean-100.tar.gz",
+                                    6.4e9),
+}
+ALL_PARTS = {**PARTS, **EXTRA_PARTS}
 CHUNK = 1 << 20
 USER_AGENT = "eyeable-get-data/1.0"
 
@@ -191,11 +197,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tiny", action="store_true", help="only LibriSpeech test-clean (smoke test)")
     parser.add_argument("--yes", action="store_true", help="don't ask, just download")
     parser.add_argument("--keep-archives", action="store_true", help="don't delete the .tar files")
+    parser.add_argument("--train-clean-100", action="store_true",
+                        help="only LibriSpeech train-clean-100 (6.3 GB, for prepare_sim)")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir)
     log = common.Log()
 
-    names = TINY_PARTS if args.tiny else list(PARTS)
+    names = TINY_PARTS if args.tiny else list(EXTRA_PARTS) if args.train_clean_100 else list(PARTS)
     todo = [n for n in names if not (data_dir / f".done-{n}").exists()]
     if not todo:
         log(f"Everything is already in {data_dir}")
@@ -204,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     log(f"Download into {data_dir}:")
     biggest, kept = 0.0, 0.0
     for n in todo:
-        urls, _archive, extracted = PARTS[n]
+        urls, _archive, extracted = ALL_PARTS[n]
         size = remote_size(urls)
         log(f"  {n:<24} download {gb(size) if size else '?':>8}, keeps about {gb(extracted)}")
         biggest = max(biggest, size or 3e9)
@@ -227,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     downloads = data_dir / "_downloads"
     downloads.mkdir(parents=True, exist_ok=True)
     for n in todo:
-        urls, archive_name, _ = PARTS[n]
+        urls, archive_name, _ = ALL_PARTS[n]
         archive = downloads / archive_name
         log(f"{n}: downloading")
         if not archive.exists():

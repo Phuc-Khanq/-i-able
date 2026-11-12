@@ -42,6 +42,8 @@ GROUPS = {
     "dys_words": "Dysarthric, single words (1-2 words)",
     "librispeech": "LibriSpeech (typical speech)",
     "personal": "Personal voice pack",
+    "sim": "Simulated dysarthric (LibriSpeech)",
+    "sim_clean": "The same LibriSpeech clips, clean",
 }
 DYS_GROUPS = ("dys_unseen", "dys_seen", "dys_words")
 
@@ -56,8 +58,10 @@ def manifests_dir(data_dir: Path) -> Path:
     return Path(data_dir) / "manifests"
 
 
-def manifest_path(data_dir: Path, tiny: bool = False) -> Path:
-    return manifests_dir(data_dir) / ("tiny.csv" if tiny else "all.csv")
+def manifest_path(data_dir: Path, tiny: bool = False, name: str = "all") -> Path:
+    """all.csv (prepare.py: TORGO, LibriSpeech, personal), sim.csv (prepare_sim.py: simulated dysarthric speech,
+    TORGO in test only) or tiny.csv (smoke tests)."""
+    return manifests_dir(data_dir) / ("tiny.csv" if tiny else f"{name}.csv")
 
 
 def is_kaggle() -> bool:
