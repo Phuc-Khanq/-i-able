@@ -75,7 +75,18 @@ def render(settings=None) -> str:
               '| "change <words> to <new words>", "replace <words> with <new words>", "correct <words> to <new words>" '
               '| Swaps those words on the card (the last place they appear) |',
               '| "delete <words>", "remove <words>" | Takes those words off the card |',
+              '| "spell H A T H A W A Y" | Adds the spelled word to the card (in Pointer mode it starts a preview). '
+              'Say "capital H" for a capital letter, "double L" for two, "all caps" first for capitals |',
+              '| "change <words> to T H E R E", "change <words> to spell T H E R E" | Swaps those words for the '
+              'spelled one |',
               '| "scratch that" | Takes back the last thing you said or your last fix, one step at a time |', ""]
+    lines += ["## Your words", "",
+              "Names and terms the speech recogniser should lean toward. They help from the next sentence on. "
+              "\"Delete my voice data\" deletes the list.", "",
+              "| Say | What it does |", "| --- | --- |",
+              '| "add <word> to my words", "add H A T H A W A Y to my words" | Adds a word or name to your list |',
+              '| "add that to my words" | Adds the word you just spelled or changed |',
+              '| "remove <word> from my words" | Takes it off your list |', ""]
     apps = ", ".join(sorted(settings.launch_apps))
     sites = ", ".join(sorted(settings.launch_sites))
     lines += ["## Apps and sites", "", "| Say | What it does |", "| --- | --- |",

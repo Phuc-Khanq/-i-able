@@ -7,7 +7,8 @@ Subscribes: a delete request from the settings panel (topics.DELETE_VOICE_DATA, 
 APIs: pathlib
 
 What it deletes: data/voice/personal/ (the recordings made with
-`python -m engine.voice.finetune.record_pack`, plus their transcripts.csv).
+`python -m engine.voice.finetune.record_pack`, plus their transcripts.csv, and the user's word list
+words.txt from engine/voice/personal_words.py).
 Live microphone audio is never saved, so there is nothing else to delete.
 
     python -m engine.voice.voice_data      # delete from the command line (asks first)

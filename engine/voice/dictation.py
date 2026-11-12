@@ -62,12 +62,32 @@ def load_torch_first(device: str, platform: str | None = None, import_module=imp
 class Dictation:
     """Wraps faster-whisper. Pass `model` in tests to skip loading Whisper."""
 
-    def __init__(self, settings=None, model=None, hotwords: str | None = None) -> None:
+    def __init__(self, settings=None, model=None, hotwords: str | None = None, personal_words=None) -> None:
         self.settings = settings
+        explicit = hotwords is not None
         if hotwords is None:      # settings.whisper_hotwords; "" = none
             hotwords = str(getattr(settings, "whisper_hotwords", "") or "").strip() or None
         self.hotwords = hotwords  # e.g. names the user says often: "Khoa Nhi Gmail"
+        # The user's word list (engine/voice/personal_words.py), read before each utterance so a word added by voice
+        # helps at once. Only for the real model from settings: tests and the fine-tune evaluation (model=...) and an
+        # explicit hotwords= don't get it unless they pass one.
+        if personal_words is None and settings is not None and model is None and not explicit:
+            from engine.voice.personal_words import PersonalWords
+            personal_words = PersonalWords()
+        self.personal_words = personal_words
         self._model = model
+
+    def current_hotwords(self) -> str | None:
+        """What Whisper leans toward for the next utterance: the user's words (newest first), then
+        settings.whisper_hotwords. A list that can't be read is skipped, never an error."""
+        if self.personal_words is None:
+            return self.hotwords
+        from engine.voice.personal_words import combine
+        try:
+            hint = self.personal_words.hint()
+        except Exception:
+            hint = ""
+        return combine(hint, self.hotwords or "")
 
     def load(self) -> None:
         if self._model is None:
@@ -108,7 +128,7 @@ class Dictation:
             word_timestamps=True,
             vad_filter=False,                # audio_in already cut the utterance with Silero VAD
             condition_on_previous_text=False,
-            hotwords=self.hotwords,
+            hotwords=self.current_hotwords(),
         )
         words: list[dict] = []
         for seg in segments:                 # segments is lazy: this loop runs the model

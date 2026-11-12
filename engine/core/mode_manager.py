@@ -213,6 +213,10 @@ class ModeManager:
         # time: the last thing said, or the last fix. Each entry is (the preview before that change, was it final).
         self._history: list[tuple[list[dict], bool]] = []
         self._final = False                      # the preview was fixed by hand or by voice: no new clean-up of it
+        # The user's word list ("add Hathaway to my words"): engine/voice/personal_words.py, made on first use.
+        # Tests set it to a PersonalWords on a temporary file.
+        self.personal_words = None
+        self._last_taught = ""                   # the word just spelled or changed in: what "add that" adds
         self._lock = threading.RLock()
         self._stop = threading.Event()
 
@@ -338,9 +342,15 @@ class ModeManager:
                 # be typed into the preview); "Don't." / "Ya." likewise. With nothing waiting they're just words.
                 self._do(Command(name=heard))
                 return
+            if (not self.question and self.mode in (Mode.DICTATION, Mode.POINTER)
+                    and self._word_list(transcript["text"])):
+                return                        # "add Hathaway to my words"
             if (self.preview and not self.question and self.mode in (Mode.DICTATION, Mode.POINTER)
                     and self._voice_edit(transcript["text"])):
                 return                        # "change Hawthorne to Hathaway" fixed the card
+            if (not self.question and self.mode in (Mode.DICTATION, Mode.POINTER)
+                    and self._spell(transcript["text"])):
+                return                        # "spell H A T H A W A Y" put the word on the card
             if self.mode == Mode.SCROLL:
                 self._scroll_transcript(transcript, clauses)
                 return
@@ -859,7 +869,58 @@ class ModeManager:
                 return True
             return False
         self._log(f'[edit] {edit.kind} "{edit.old}"' + (f' -> "{edit.new}"' if edit.kind == "replace" else ""))
+        if edit.kind == "replace":
+            self._last_taught = edit.new
         self._edit_preview(words, "Changed" if edit.kind == "replace" else "Deleted")
+        return True
+
+    def _spell(self, text: str) -> bool:
+        """ "spell H A T H A W A Y": the spelled word goes on the end of the card, exactly as spelled (no clean-up
+        of it), and True. In Pointer mode it starts a preview, like "type ...". False if it isn't spelling."""
+        body, _ = launch.strip_trigger(text)
+        fixed = commands.parse(body, allow_targets=False)
+        if fixed is not None and fixed.name != "type_text":
+            return False
+        word = commands.parse_spell(body)
+        if word is None:
+            return False
+        self._log(f'[spell] "{word}"')
+        self._last_taught = word
+        self._edit_preview(commands.add_word(self._shown_words(), word), "Spelled")
+        return True
+
+    def _word_list(self, text: str) -> bool:
+        """ "add Hathaway to my words" / "add that to my words" / "remove Hathaway from my words": change the user's
+        word list (Whisper leans toward it from the next utterance) and return True. False if it isn't one."""
+        body, _ = launch.strip_trigger(text)
+        fixed = commands.parse(body, allow_targets=False)
+        if fixed is not None and fixed.name != "type_text":
+            return False
+        change = commands.parse_word_list(body)
+        if change is None:
+            return False
+        word = change.word or self._last_taught
+        if not word:
+            self._status("warn", 'Spell the word first ("spell H A T"), then say "add that to my words"')
+            return True
+        if self.personal_words is None:
+            from engine.voice.personal_words import PersonalWords
+            self.personal_words = PersonalWords()
+        try:
+            if change.kind == "add":
+                saved = self.personal_words.add(word)
+                self._log(f'[words] added "{saved}"')
+                self._ui(messages.COMMAND, label="Added to your words")
+                self._status("info", f'"{saved}" is in your words now')
+            elif self.personal_words.remove(word):
+                self._log(f'[words] removed "{word}"')
+                self._ui(messages.COMMAND, label="Removed from your words")
+                self._status("info", f'"{word}" is out of your words')
+            else:
+                self._status("warn", f'"{word}" isn\'t in your words')
+        except OSError as exc:
+            self._log(f"[words] couldn't save the list: {exc}")
+            self._status("error", "Couldn't save your words")
         return True
 
     def _preview_text(self) -> str:

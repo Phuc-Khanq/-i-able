@@ -215,6 +215,83 @@ class TestEditWithCleanUp(Base):
         self.assertEqual(self.shown(), "Call Mr. Hawthorne tomorrow.")
 
 
+class TestSpelled(unittest.TestCase):
+    def test_ways_whisper_writes_spelling(self):
+        for said in ["H A T H A W A Y", "H-A-T-H-A-W-A-Y.", "H. A. T. H. A. W. A. Y.", "HATHAWAY", "h, a, t, h, a, w, a, y"]:
+            self.assertEqual(commands.spelled(said.split()), "hathaway", said)
+
+    def test_letter_names_capitals_and_doubles(self):
+        self.assertEqual(commands.spelled("capital M c capital D o n a l d".split()), "McDonald")
+        self.assertEqual(commands.spelled("bee ee double ell".split()), "bell")
+        self.assertEqual(commands.spelled("double you H Y".split()), "why")
+        self.assertEqual(commands.spelled("E dash M A I L".split()), "e-mail")
+        self.assertEqual(commands.spelled("P R E D N I S O N E".split()), "prednisone")
+
+    def test_not_spelling(self):
+        for said in ["check", "it out", "the word", "you are a star"]:
+            self.assertIsNone(commands.spelled(said.split()), said)
+
+    def test_strict_needs_single_letters(self):
+        self.assertEqual(commands.spelled("T H E R E.".split(), strict=True), "there")
+        self.assertEqual(commands.spelled(["T-H-E-R-E"], strict=True), "there")
+        for said in ["you are", "U.S.", "A", "a car", "HATHAWAY", "bee ee"]:
+            self.assertIsNone(commands.spelled(said.split(), strict=True), said)
+
+
+class TestParseSpell(unittest.TestCase):
+    def test_spell(self):
+        self.assertEqual(commands.parse_spell("Spell H-A-T-H-A-W-A-Y."), "hathaway")
+        self.assertEqual(commands.parse_spell("um, spell out A F O please"), "afo")
+        self.assertEqual(commands.parse_spell("Spell Hathaway, H-A-T-H-A-W-A-Y."), "hathaway")   # the letters win
+
+    def test_not_spell(self):
+        for text in ["spell", "Spell check is on.", "spell check", "I can't spell it", "spelling bee tonight"]:
+            self.assertIsNone(commands.parse_spell(text), text)
+
+    def test_change_to_spelled(self):
+        self.assertEqual(parse_edit("Change their to T H E R E."), Edit("replace", "their", "there"))
+        self.assertEqual(parse_edit("change Hawthorn to spell H A T H A W A Y"), Edit("replace", "hawthorn", "hathaway"))
+        self.assertEqual(parse_edit("change pregnazone to P-R-E-D-N-I-S-O-N-E"),
+                         Edit("replace", "pregnazone", "prednisone"))
+        self.assertEqual(parse_edit("change it to you are"), Edit("replace", "it", "you are"))   # words, not letters
+        self.assertIsNone(parse_edit("change Hawthorn to spell the new name"))
+
+
+class TestSpellInDictation(Base):
+    def test_spell_adds_the_word(self):
+        self.say("Please call Doctor")
+        self.say("Spell H-A-T-H-A-W-A-Y.")
+        self.assertEqual(self.shown(), "Please call Doctor hathaway")
+        self.assertIn("Spelled", self.flashes())
+        self.say("scratch that")
+        self.assertEqual(self.shown(), "Please call Doctor")
+
+    def test_capital_and_sentence_start(self):
+        self.say("Spell all caps A F O.")
+        self.assertEqual(self.shown(), "AFO")
+        self.say("I need a new one.")
+        self.say("spell A F O")
+        self.assertEqual(self.shown(), "AFO I need a new one. Afo")
+
+    def test_change_to_spelled_keeps_the_capital(self):
+        self.say("Call Mr. Hawthorn tomorrow.")
+        self.say("Change Hawthorn to H A T H A W A Y.")
+        self.assertEqual(self.shown(), "Call Mr. Hathaway tomorrow.")
+        self.say("yes")
+        self.assertEqual(self.typed(), ["Call Mr. Hathaway tomorrow. "])
+
+    def test_spell_check_is_dictation(self):
+        self.say("Spell check is on.")
+        self.assertEqual(self.shown(), "Spell check is on.")
+
+    def test_spell_in_pointer_mode_starts_a_preview(self):
+        self.say("stop dictation")
+        self.say("spell H A T H A W A Y")
+        self.assertEqual(self.shown(), "Hathaway")
+        self.say("yes")
+        self.assertEqual(self.typed(), ["Hathaway "])
+
+
 class TestCommandList(unittest.TestCase):
     def test_new_phrases_are_one_command(self):
         for p in ["delete last word", "delete the last word", "remove the last word"]:

@@ -650,15 +650,22 @@ def word_key(text: str) -> str:
     return re.sub(r"[^\w']", "", str(text).lower().replace("’", "'"))
 
 
-def parse_edit(text: str) -> Edit | None:
-    """ "change X to Y" / "replace X with Y" / "correct X to Y" / "delete X" / "remove X", as a whole utterance.
-    None for anything else, for "delete that" / "delete my voice data" (fixed commands) and for a long or
-    multi-sentence utterance (that's dictation)."""
-    raw = [w for w in str(text).replace("’", "'").split() if word_key(w)]
+def _request_words(text: str) -> list[str]:
+    """The utterance's words without leading fillers ("um", "can you"), punctuation still on them."""
+    raw = [w for w in str(text).replace("’", "'").split() if word_key(w) or w.strip(".,!?;:\"") in ("-", "'")]
     while raw and word_key(raw[0]) in FILLER_WORDS:
         raw.pop(0)
     if len(raw) > 2 and f"{word_key(raw[0])} {word_key(raw[1])} " in FILLER_PREFIXES:   # "can you change ..."
         raw = raw[2:]
+    return raw
+
+
+def parse_edit(text: str) -> Edit | None:
+    """ "change X to Y" / "replace X with Y" / "correct X to Y" / "delete X" / "remove X", as a whole utterance.
+    Y can be spelled: "change their to T H E R E", "change Hawthorn to spell H A T H A W A Y".
+    None for anything else, for "delete that" / "delete my voice data" (fixed commands) and for a long or
+    multi-sentence utterance (that's dictation)."""
+    raw = _request_words(text)
     if len(raw) < 2:
         return None
     for w in raw[:-1]:
@@ -681,12 +688,22 @@ def parse_edit(text: str) -> Edit | None:
         old = old[:-1]
     if len(new) > 1 and word_key(new[-1]) == "please":   # "... to Tuesday, please"
         new = new[:-1]
-    if not old or len(old) > EDIT_MAX_OLD_WORDS or (kind == "replace" and not 1 <= len(new) <= EDIT_MAX_NEW_WORDS):
+    spelled_new = None
+    if kind == "replace" and new:
+        if word_key(new[0]) in SPELL_VERBS:                 # "... to spell H A T H A W A Y": letter names allowed
+            spelled_new = spelled(new[1:])
+            if spelled_new is None:
+                return None
+        else:                                               # "... to T H E R E": single letters only
+            spelled_new = spelled(new, strict=True)
+    if not old or len(old) > EDIT_MAX_OLD_WORDS:
+        return None
+    if kind == "replace" and spelled_new is None and not 1 <= len(new) <= EDIT_MAX_NEW_WORDS:
         return None
     if kind == "delete" and (len(old) == 1 and word_key(old[0]) in POINTING_WORDS):
         return None                       # "delete that" / "remove it": the fixed command
     old_text = " ".join(word_key(w) for w in old)
-    new_text = " ".join(w.strip(".,!?;:\"'") for w in new).strip()
+    new_text = spelled_new or " ".join(w.strip(".,!?;:\"'") for w in new).strip()
     if kind == "replace" and not new_text:
         return None
     return Edit(kind=kind, old=old_text, new=new_text)
@@ -766,6 +783,164 @@ def drop_last_word(words: list[dict]) -> list[dict]:
     tail = re.search(r"[.!?]+[\"')\]]*$", words[-1]["text"])
     if tail and out and not re.search(r"[.,!?;:]$", out[-1]["text"]):
         out[-1]["text"] += tail.group()
+    return out
+
+
+# ------------------------------------------------------------------ spelling a word
+# For what Whisper can't get right however it's said: names, medical words, sound-alikes. "spell H A T H A W A Y"
+# adds the word to the card; "change their to T H E R E" swaps a word for the spelled one. Letters come out
+# lowercase; "capital H" makes one a capital, and a word that starts a sentence gets its capital as usual.
+SPELL_VERBS = ("spell", "spelled", "spelling")
+SPELL_MAX_LETTERS = 40
+LETTER_NAMES = {
+    "ay": "a", "bee": "b", "be": "b", "see": "c", "sea": "c", "cee": "c", "dee": "d", "ee": "e", "eff": "f",
+    "ef": "f", "gee": "g", "aitch": "h", "haitch": "h", "eye": "i", "jay": "j", "kay": "k", "el": "l", "ell": "l",
+    "em": "m", "en": "n", "oh": "o", "pee": "p", "pea": "p", "cue": "q", "queue": "q", "are": "r", "ar": "r",
+    "es": "s", "ess": "s", "tee": "t", "tea": "t", "you": "u", "vee": "v", "ex": "x", "why": "y", "zee": "z",
+    "zed": "z",
+}
+_CAPITAL = {"capital", "cap", "uppercase", "upper", "big"}
+_SPELL_MARKS = {"dash": "-", "hyphen": "-", "apostrophe": "'"}
+
+
+def spelled(tokens: list[str], strict: bool = False) -> str | None:
+    """The word spelled out in `tokens` ("H A T H A W A Y", "H-A-T-H-A-W-A-Y", "capital M c D o n a l d"), or None
+    if any token isn't a letter.
+    strict (after "change X to", where no "spell" was said): single letters only, at least two of them, so
+    "change it to you are" or "change America to U.S." stay ordinary words. Otherwise letter names ("bee",
+    "double you"), letters run together in capitals ("HATHAWAY", how Whisper sometimes writes spelling) and
+    dotted letters ("H.A.T.") count too."""
+    pieces = []
+    for t in tokens:
+        t = t.replace("’", "'")
+        t = t if t in ("-", "'") else t.strip(".,!?;:\"")   # "E." ending the utterance; "U.S" keeps its inner dot
+        if t in ("-", "'"):
+            pieces.append(t)
+            continue
+        pieces += [p for p in re.split(r"-" if strict else r"[-.]", t) if p]
+    all_caps = len(pieces) > 2 and pieces[0].lower() == "all" and pieces[1].lower() in _CAPITAL | {"caps", "capitals"}
+    if all_caps:                                           # "all caps A F O" -> "AFO"
+        pieces = pieces[2:]
+    out, capital, letters, i = [], False, 0, 0
+    while i < len(pieces):
+        p, k = pieces[i], pieces[i].lower()
+        i += 1
+        if k in _CAPITAL and i < len(pieces):
+            capital = True
+            continue
+        if k in _SPELL_MARKS or p in ("-", "'"):
+            out.append(_SPELL_MARKS.get(k, p))
+            continue
+        times = 1
+        if k == "double" and i < len(pieces):
+            nxt = pieces[i].lower()
+            if nxt in ("you", "u"):                        # "double you" is w
+                i += 1
+                chars = "w"
+            else:
+                times, p, k = 2, pieces[i], nxt
+                i += 1
+                chars = None
+        else:
+            chars = None
+        if chars is None:
+            if len(p) == 1 and p.isalnum():
+                chars = k
+            elif not strict and k in LETTER_NAMES:
+                chars = LETTER_NAMES[k]
+            elif not strict and p.isalpha() and p.isupper():
+                chars = k                                  # "HATHAWAY"
+            else:
+                return None
+        chars = chars * times
+        if capital:
+            chars = chars[:1].upper() + chars[1:]
+            capital = False
+        out.append(chars)
+        letters += len(chars)
+    word = "".join(out).strip("-'")
+    if all_caps:
+        word = word.upper()
+    if not word or letters > SPELL_MAX_LETTERS or (strict and letters < 2):
+        return None
+    return word
+
+
+def parse_spell(text: str) -> str | None:
+    """ "spell H A T H A W A Y" (a whole utterance): the word, or None. Whisper often writes the word itself first
+    ("Spell Hathaway, H-A-T-H-A-W-A-Y."): the letters win."""
+    raw = _request_words(text)
+    if len(raw) < 2 or word_key(raw[0]) not in SPELL_VERBS:
+        return None
+    rest = raw[1:]
+    if rest and word_key(rest[0]) in ("out", "it") and len(rest) > 1:   # "spell out ...", "spell it ..."
+        rest = rest[1:]
+    if len(rest) > 1 and word_key(rest[-1]) == "please":
+        rest = rest[:-1]
+    word = spelled(rest)
+    if word is None and len(rest) > 1:
+        word = spelled(rest[1:])
+        if word is not None and len(word) < 2:
+            word = None
+    return word
+
+
+# ------------------------------------------------------------------ the user's word list
+# "add Hathaway to my words", "add that to my words" (the word just spelled or changed), "remove Hathaway from my
+# words". The words go to engine/voice/personal_words.py; Whisper leans toward them from the next utterance on.
+WORD_LIST_NAMES = ("my words", "my word list", "my list of words", "my dictionary", "my vocabulary")
+WORD_LIST_MAX_WORDS = 4
+
+
+@dataclass(frozen=True)
+class WordListChange:
+    kind: str     # "add" or "remove"
+    word: str     # "" = "that": the word just spelled or changed
+
+
+def parse_word_list(text: str) -> WordListChange | None:
+    """ "add <word> to my words" / "remove <word> from my words" (also "my word list", "my dictionary"), as a whole
+    utterance. The word can be spelled ("add H A T H A W A Y to my words"); "that" / "it" / "this" gives word ""."""
+    raw = _request_words(text)
+    if len(raw) > 1 and word_key(raw[-1]) == "please":
+        raw = raw[:-1]
+    if len(raw) < 4:
+        return None
+    verb = word_key(raw[0])
+    if verb == "add":
+        kind, joins = "add", ("to", "into")
+    elif verb in ("remove", "delete"):
+        kind, joins = "remove", ("from", "off")
+    else:
+        return None
+    keys = [word_key(w) for w in raw]
+    for i in range(2, len(raw)):
+        if keys[i] in joins and " ".join(k for k in keys[i + 1:] if k) in WORD_LIST_NAMES:
+            middle = raw[1:i]
+            break
+    else:
+        return None
+    while len(middle) > 1 and word_key(middle[0]) in _EDIT_LEAD:   # "add the word Hathaway to ..."
+        middle = middle[1:]
+    if not middle:
+        return None
+    if len(middle) == 1 and word_key(middle[0]) in POINTING_WORDS:
+        return WordListChange(kind, "")
+    word = spelled(middle, strict=True)
+    if word is None:
+        if len(middle) > WORD_LIST_MAX_WORDS:
+            return None
+        word = " ".join(w.strip(".,!?;:\"") for w in middle).strip()
+    return WordListChange(kind, word) if word else None
+
+
+def add_word(words: list[dict], word: str) -> list[dict]:
+    """The card's words with `word` added at the end (conf 1.0: the user spelled it). It takes a sentence's
+    capital when it starts one; a sentence-ending period on the last word stays there."""
+    out = [dict(w) for w in words]
+    if not out or _ends_sentence(out[-1]["text"]):
+        word = word[:1].upper() + word[1:]
+    out.append({"text": word, "conf": 1.0})
     return out
 
 
