@@ -27,14 +27,18 @@ SPEECH_SPAN = "voice.speech_span"   # {"start_ms": float, "end_ms": float} (audi
 PARTIAL_AUDIO = "voice.partial_audio"  # {"audio": float32 array, "start_ms", "end_ms"} (audio_in -> dictation): the
                                     # audio of the utterance so far, about once a second while the user is still
                                     # speaking (live preview only; the final UTTERANCE follows)
-TRANSCRIPT = "voice.transcript"     # {"text": str, "words": [{"text", "conf"}], "ms": float}
+TRANSCRIPT = "voice.transcript"     # {"text": str, "words": [{"text", "conf"}], "ms": float}. Optional: "hearings"
+                                    # (list of str, at most 2): Whisper's other versions of the whole utterance, only
+                                    # when it was unsure of a word; never just a change of punctuation or capitals
 DELETE_VOICE_DATA = "voice.delete_data"  # {} (mode manager -> voice_data, after a confirm)
 
 # Dictation clean-up (mode manager <-> engine/voice/rewrite.py RewriteWorker)
 REWRITE_REQUEST = "dictation.rewrite_request"  # {"id": int, "text": str}, each time the preview text changes.
                                                # Optional: "context" (what was typed earlier in this dictation),
                                                # "app" (the kind of app in front: "email", "Slack", "document" ...),
-                                               # and for a refine "mode": "refine" and "marked"
+                                               # "hearings" (list of str, at most 2: other versions of "text", each
+                                               # with one place heard differently; the trained model's "Other
+                                               # hearings"), and for a refine "mode": "refine" and "marked"
 REWRITE_RESULT = "dictation.rewrite_result"    # {"id": int, "clean": str, "used": bool, "ms": float}; clean is
                                                # the original text when used is False. Optional, trained model only:
                                                # "alternatives" (list of str) and "uncertain" (bool)

@@ -315,7 +315,7 @@ class CleanupModel:
               app: str = "", alternatives: list[str] = ()) -> tuple[Answer | None, bool]:
         """(the parsed answer or None if it isn't valid JSON, cut_off: it hit the token cap). `before` is what was
         typed earlier in this dictation, `app` the kind of app in front, `alternatives` Whisper's other hearings: the
-        prompt's "Before", "App" and "Other hearings" (the Rewriter doesn't pass other hearings yet).
+        prompt's "Before", "App" and "Other hearings" (the rewrite request's "hearings"; Whisper doesn't send them yet).
         The answer is marked uncertain when the model gave a content word under UNSURE_BELOW (see weakest_word)."""
         n = max_tokens or min(900, 64 + 4 * len(text.split()))   # the JSON repeats the text, maybe twice
         prompt = build_prompt(text, self.words, app=app, before=before, alternatives=alternatives, prompt=self._prompt)

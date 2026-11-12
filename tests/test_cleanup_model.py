@@ -157,9 +157,9 @@ class FakeCleanup:
     def start(self):
         pass
 
-    def clean(self, text, max_s, max_tokens=None, before="", app=""):
+    def clean(self, text, max_s, max_tokens=None, before="", app="", alternatives=()):
         self.sent.append(text)
-        self.hints = {"before": before, "app": app}
+        self.hints = {"before": before, "app": app, "alternatives": list(alternatives)}
         raw = self.replies.get(text)
         return (parse_answer(raw) if raw else None), False
 
@@ -212,7 +212,7 @@ class TestLlamaCppBackend(unittest.TestCase):
     def test_context_and_app_reach_the_model_and_the_guard(self):
         rw, fake = llamacpp_rewriter({"forward it to doctor alvarez": reply("Forward it to Dr. Alvarez.")})
         r = rw.rewrite_full("forward it to doctor alvarez", context="Thanks, Dr. Alvarez.", app="email")
-        self.assertEqual(fake.hints, {"before": "Thanks, Dr. Alvarez.", "app": "email"})
+        self.assertEqual(fake.hints, {"before": "Thanks, Dr. Alvarez.", "app": "email", "alternatives": []})
         self.assertTrue(r.used)
         # a name only the earlier text holds is not invented
         rw, _ = llamacpp_rewriter({"tell him I'm late": reply("Tell Marcus I'm late.")})
@@ -422,6 +422,70 @@ class TestOwnDoubt(unittest.TestCase):
             first, second = (json.loads(r.data) for r in s._http.requests[-2:])
             self.assertNotIn("n_probs", first)
             self.assertEqual(second["n_probs"], 1)
+
+
+class FakeBus:
+    def __init__(self):
+        self.sent = []
+
+    def publish(self, topic, payload):
+        self.sent.append((topic, payload))
+
+    def subscribe(self, topic, fn):
+        pass
+
+
+class TestHearings(unittest.TestCase):
+    """Whisper's other hearings: the rewrite request's "hearings" become the trained model's "Other hearings"."""
+
+    BENCH = [("Meet", 1.0), (" me", 1.0), (" at", 1.0), (" the", 1.0), (" bench", 1.0), (".", 1.0)]
+
+    def worker(self, backend="llamacpp"):
+        from engine.voice.rewrite import RewriteWorker
+
+        model = CleanupModel(StubServer(self.BENCH))
+        settings = SimpleNamespace(rewrite_backend=backend, rewrite_gguf="m.gguf", rewrite_words="",
+                                   rewrite_max_s=3.0, refine_max_s=15.0)
+        bus = FakeBus()
+        return RewriteWorker(bus, Rewriter(settings, cleanup=model, log=lambda *a: None), log=lambda *a: None), model
+
+    def test_the_request_hearings_reach_the_prompt(self):
+        w, model = self.worker()
+        w.process({"id": 1, "text": "meet me at the bank", "hearings": ["meet me at the bench", "meat me at the bank"]})
+        self.assertIn("Other hearings: meet me at the bench; meat me at the bank\n", model.server.prompts[0])
+
+    def test_no_hearings_is_none_as_before(self):
+        w, model = self.worker()
+        w.process({"id": 1, "text": "meet me at the bank"})
+        self.assertIn("Other hearings: (none)\n", model.server.prompts[0])
+
+    def test_blank_repeated_and_extra_hearings_are_dropped(self):
+        w, model = self.worker()
+        w.process({"id": 1, "text": "meet me at the bank",
+                   "hearings": [" ", "meet me at the bank", "meet me at the bench", "meat me at the bank", "a third"]})
+        self.assertIn("Other hearings: meet me at the bench; meat me at the bank\n", model.server.prompts[0])
+
+    def test_hearings_that_are_not_a_list_are_ignored(self):
+        w, model = self.worker()
+        w.process({"id": 1, "text": "meet me at the bank", "hearings": "meet me at the bench"})
+        self.assertIn("Other hearings: (none)\n", model.server.prompts[0])
+
+    def test_the_refine_passes_them_too(self):
+        w, model = self.worker()
+        w.process({"id": 2, "mode": "refine", "text": "meet me at the bank", "marked": "meet me at the (?)bank(?)",
+                   "hearings": ["meet me at the bench"]})
+        self.assertIn("Heard: meet me at the bank\nOther hearings: meet me at the bench\n", model.server.prompts[0])
+
+    def test_the_old_model_takes_them_without_breaking(self):
+        class Old(Rewriter):                           # the transformers model, without loading it
+            def _generate(self, text, *a, **kw):
+                return "Meet me at the bank.", False
+
+        settings = SimpleNamespace(rewrite_backend="transformers", rewrite_words="", rewrite_max_s=3.0,
+                                   refine_max_s=15.0)
+        r = Old(settings, log=lambda *a: None).rewrite_full("meet me at the bank", hearings=["meet me at the bench"])
+        self.assertTrue(r.used)
+        self.assertEqual(r.clean, "Meet me at the bank.")
 
 
 if __name__ == "__main__":

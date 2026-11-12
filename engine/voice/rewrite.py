@@ -609,7 +609,7 @@ class Rewriter:
     anything fails, the user's own words come back (fail open).
     """
 
-    takes_context = True                # RewriteWorker passes REWRITE_REQUEST's context and app to *_full
+    takes_context = True                # RewriteWorker passes REWRITE_REQUEST's context, app and hearings to *_full
 
     def __init__(self, settings=None, model=None, tokenizer=None, clock=None, log=print, cleanup=None) -> None:
         import time
@@ -673,10 +673,11 @@ class Rewriter:
         self.rewrite_full("um so this is uh a test")
 
     def _generate(self, text: str, system: str = SYSTEM_PROMPT, examples=None, max_s: float | None = None,
-                  refine: bool = False, context: str = "", app: str = "") -> tuple[str, bool]:
-        """(the model's new text, cut_off). cut_off: it stopped on the token or time cap, not on its own."""
+                  refine: bool = False, context: str = "", app: str = "", hearings=()) -> tuple[str, bool]:
+        """(the model's new text, cut_off). cut_off: it stopped on the token or time cap, not on its own.
+        `hearings` (Whisper's other versions of the text) only reach the trained model."""
         if self.backend == "llamacpp":
-            return self._generate_cleanup(text, self.max_s if max_s is None else max_s, context, app)
+            return self._generate_cleanup(text, self.max_s if max_s is None else max_s, context, app, hearings)
         import torch
 
         self.load()
@@ -702,12 +703,14 @@ class Rewriter:
         cut_off = not any(t in eos_ids for t in new)
         return tok.decode(new, skip_special_tokens=True), cut_off
 
-    def _generate_cleanup(self, text: str, max_s: float, context: str = "", app: str = "") -> tuple[str, bool]:
-        """The trained model (llamacpp): its answer's text. It never saw the (?)word(?) marks, so they go."""
+    def _generate_cleanup(self, text: str, max_s: float, context: str = "", app: str = "",
+                          hearings=()) -> tuple[str, bool]:
+        """The trained model (llamacpp): its answer's text. It never saw the (?)word(?) marks, so they go.
+        `hearings` become its prompt's "Other hearings" (as in its training and the eval)."""
         self.load()
         self.last_answer = None
         answer, cut_off = self._cleanup.clean(_UNSURE.sub(lambda m: m.group(1), text), max_s=max_s,
-                                              before=context, app=app)
+                                              before=context, app=app, alternatives=list(hearings))
         if answer is None:
             raise ValueError("the clean-up model's answer isn't valid JSON")
         self.last_answer = answer
@@ -738,14 +741,14 @@ class Rewriter:
                 alts.append(alt)
         return alts, a.uncertain
 
-    def rewrite_full(self, text: str, context: str = "", app: str = "") -> RewriteOutcome:
+    def rewrite_full(self, text: str, context: str = "", app: str = "", hearings=()) -> RewriteOutcome:
         import time
 
         if not text or not text.strip():
             return RewriteOutcome(text, text, False, 0.0, "nothing to clean")
         t0 = time.perf_counter()
         try:
-            output, cut_off = self._generate(text, context=context, app=app)
+            output, cut_off = self._generate(text, context=context, app=app, hearings=hearings)
         except Exception as exc:                                 # dictation must never stop because of this
             now = self._clock()
             if now - self._last_error >= 60:
@@ -774,7 +777,7 @@ class Rewriter:
         r = self.rewrite_full(text)
         return r.clean, r.used, r.ms
 
-    def refine_full(self, marked: str, context: str = "", app: str = "") -> RewriteOutcome:
+    def refine_full(self, marked: str, context: str = "", app: str = "", hearings=()) -> RewriteOutcome:
         """Refine a whole passage. `marked` is the user's words with (?)word(?) around the ones Whisper was
         unsure of. Not used (rejected, cut off, failed): the user's own words come back, so the caller keeps
         whatever it was already showing."""
@@ -786,7 +789,8 @@ class Rewriter:
         t0 = time.perf_counter()
         try:
             output, cut_off = self._generate(marked, system=REFINE_SYSTEM_PROMPT, examples=REFINE_EXAMPLES,
-                                             max_s=self.refine_max_s, refine=True, context=context, app=app)
+                                             max_s=self.refine_max_s, refine=True, context=context, app=app,
+                                             hearings=hearings)
         except Exception as exc:                                 # never stops dictation
             now = self._clock()
             if now - self._last_error >= 60:
@@ -883,6 +887,11 @@ class RewriteWorker:
         clean, used, ms, alts, unsure = text, False, 0.0, [], False
         refine = request.get("mode") == "refine"
         hints = {k: request[k] for k in ("context", "app") if request.get(k)}
+        heard = request.get("hearings")                         # Whisper's other versions of the text, at most 2
+        hearings = [str(h) for h in heard if str(h).strip() and str(h).strip() != text.strip()][:2] \
+            if isinstance(heard, (list, tuple)) else []
+        if hearings:
+            hints["hearings"] = hearings
         if self.off_reason is None:
             try:
                 if getattr(self.rewriter, "takes_context", False):   # the Rewriter: hints in, other readings out
