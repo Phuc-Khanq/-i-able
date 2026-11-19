@@ -39,6 +39,25 @@ SILENT_LEVEL = 0.15       # 0-1 meter: about -51 dBFS
 DEBUG_EVERY_S = 0.5
 
 
+def settings_line(settings, worker) -> str:
+    """One line with the dictation settings that change what Whisper hears, and the user's own lists."""
+    from engine.voice import personal_fixes, personal_words, snippets
+    from engine.voice.dictation import DECODE
+
+    def count(make) -> str:
+        try:
+            return str(len(make()))
+        except Exception:
+            return "?"
+
+    redecode = "off" if "log_prob_threshold" in DECODE and DECODE["log_prob_threshold"] is None else "on"
+    return (f"  pause {settings.pause_seconds:.1f} s | VAD threshold {getattr(settings, 'vad_threshold', 0.5)} | "
+            f"random re-decoding {redecode} | other hearings {'on' if worker.send_hearings else 'off'} | "
+            f"your words {count(lambda: personal_words.PersonalWords().words())}, "
+            f"fixes {count(lambda: personal_fixes.PersonalFixes().fixes())}, "
+            f"snippets {count(lambda: snippets.Snippets().all())}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -75,8 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     class ReportingDictation(Dictation):
         """Dictation that also says when Whisper's answer was dropped (the app stays quiet)."""
 
-        def transcribe(self, audio):
-            words = super().transcribe(audio)
+        def transcribe(self, audio, **kwargs):
+            words = super().transcribe(audio, **kwargs)
             if not words:
                 with lock:
                     _, secs = sent_at.pop(0) if sent_at else (0.0, 0.0)
@@ -91,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
             sent, secs = sent_at.pop(0) if sent_at else (now, 0.0)
         print(f'  "{t["text"]}"\n    speech {secs:4.1f} s | whisper {t["ms"]:6.0f} ms | '
               f"after {1000 * (now - sent):6.0f} ms", flush=True)
+        for n, h in enumerate(t.get("hearings") or [], 2):     # Whisper's other readings ("option two" on the card)
+            print(f'    option {n}: "{h}"', flush=True)
         finished.set()
 
     def on_ui(msg: dict) -> None:
@@ -113,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     model = resolve_model(settings.whisper_model)
     print(f"Loading Whisper {model} on {settings.whisper_device} ({settings.whisper_compute_type}) "
           "in the background...", flush=True)
+    print(settings_line(settings, worker), flush=True)
     load_failed = threading.Event()
 
     def load_whisper() -> None:
