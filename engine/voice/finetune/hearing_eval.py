@@ -391,7 +391,8 @@ def fix_simulation(rows_path: Path, text_key: str, log, mic: str = "wav_headMic"
     return out
 
 
-def cleanup_compare(rows_path: Path, text_key: str, log, groups=("dys_seen", "dys_unseen", "librispeech")) -> dict:
+def cleanup_compare(rows_path: Path, text_key: str, log,
+                    groups=("dys_seen", "dys_unseen", "librispeech", "personal")) -> dict:
     """The hearings plan's last check: the trained clean-up model (llama-server, settings.rewrite_gguf) on each
     sentence's Whisper text, without and with Whisper's other readings as "Other hearings". Scores both against the
     right text. Text only; nothing is written but the summary next to the rows."""
