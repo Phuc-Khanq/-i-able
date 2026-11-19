@@ -190,6 +190,27 @@ Before/after in one line: on held-out dysarthric speech the app's Whisper pass g
 wrong, and to 39.9% for what reaches a dictation card, with clear speech unchanged (1.50%), plus the clean-up now gets
 Whisper's other hearings and says "Check this" on 43% of its wrong answers instead of 28%.
 
+## How to try it (Khang, with mic and camera)
+
+Start the demo as usual (`.\scripts\run_demo.ps1`), say "start dictation", then:
+
+1. **Short words:** say one quiet word ("water"). It should appear on the card marked unsure, instead of nothing.
+2. **Learning from fixes:** dictate "bring me a waiter", say "change waiter to water", then "yes". Do it again; the
+   status says "waiter → water from now on". The third time, "waiter" comes out as "water" on its own. "change water
+   to waiter" undoes it.
+3. **Spelled words join your list:** "call doctor", "spell capital H A T H A W A Y", "yes". The status says
+   "Hathaway" is in your words; dictate "Hathaway" in a sentence and it should be spelled right.
+4. **Snippets:** dictate your address, fix it, say "save this as a snippet called my address", "yes". Later say
+   "insert my address" (or "my address" alone) and "yes".
+5. **Punctuation:** "are you coming comma mom question mark" should show "are you coming, mom?".
+6. **Options:** when a word is unsure, the card may list other readings; "option two" takes one.
+7. **Pause setting:** if your sentences get cut in two, try the pause slider at 2.5 s.
+
+Switches in `config.local.json` if something misbehaves in a demo: `"whisper_hearings": false` (no extra pass, no
+options), `"show_unsure_short": false` (short unsure words dropped as before), `"vad_threshold": 0.3` (to try hearing a
+quiet voice). The learned files are `data/voice/personal/words.txt`, `fixes.txt` and `snippets.txt` (plain text, git
+ignores them); "delete my voice data" removes them.
+
 ## Not done, for later
 
 - Re-hear the whole passage: when a sentence came in pieces, transcribe the pieces' audio again as one clip after the
