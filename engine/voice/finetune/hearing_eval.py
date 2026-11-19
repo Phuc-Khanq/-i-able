@@ -254,7 +254,7 @@ def context_test(clips, data_dir: Path, model, log, max_words: int = 40) -> dict
 
 
 def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, threshold: float | None = None,
-             min_speech: float | None = None) -> dict:
+             min_speech: float | None = None, max_gain: float | None = None) -> dict:
     """Does the app's front door (audio_in.py: auto gain, Silero VAD, pre-roll, pads) lose speech before Whisper?
     Each clip goes through AudioIn as if from the mic (clips of one session in a row, so the gain adapts), with
     silence after it to end the utterance. Compares the app's pass on what AudioIn cut against the whole clip.
@@ -272,11 +272,14 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, thre
         settings.pause_seconds = pause
     from engine.voice import audio_in as _ain
 
-    old_min = _ain.MIN_SPEECH_S
+    old_min, old_gain = _ain.MIN_SPEECH_S, _ain.MAX_GAIN
     if min_speech is not None:
         _ain.MIN_SPEECH_S = min_speech
+    if max_gain is not None:
+        _ain.MAX_GAIN = max_gain
     thr = threshold or _ain.VAD_THRESHOLD
-    log(f"pause_seconds {settings.pause_seconds}, VAD threshold {thr}, shortest utterance {_ain.MIN_SPEECH_S} s")
+    log(f"pause_seconds {settings.pause_seconds}, VAD threshold {thr}, shortest utterance {_ain.MIN_SPEECH_S} s, "
+        f"most gain {_ain.MAX_GAIN}x")
     from engine.core import topics
     from engine.voice import audio_in
     from engine.voice.dictation import Dictation, words_to_text
@@ -328,9 +331,10 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, thre
                   "wer_pieces_reheard": j["wer"], "missed": missed, "split": split}
         log(f"{g}: {len(sel)} clips, WER on the whole clip {a['wer']}, on what audio_in cut {b['wer']}, "
             f"pieces heard again as one {j['wer']}; no utterance at all {missed}, cut in pieces {split}")
-    _ain.MIN_SPEECH_S = old_min
+    _ain.MIN_SPEECH_S, _ain.MAX_GAIN = old_min, old_gain
     dest = (common.REPO_ROOT / "checkpoints" / "hearings"
-            / f"vad_rows_{settings.pause_seconds}_{thr}_{min_speech if min_speech is not None else old_min}.jsonl")
+            / f"vad_rows_{settings.pause_seconds}_{thr}_{min_speech if min_speech is not None else old_min}"
+              f"_{max_gain or old_gain}.jsonl")
     with open(dest, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -452,6 +456,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pause", type=float, default=None, help="--vad-test: the pause setting to try, in seconds")
     p.add_argument("--vad-threshold", type=float, default=None, help="--vad-test: Silero's speech threshold")
     p.add_argument("--min-speech", type=float, default=None, help="--vad-test: the shortest utterance kept, s")
+    p.add_argument("--max-gain", type=float, default=None, help="--vad-test: the auto gain's ceiling (times)")
     p.add_argument("--context-test", action="store_true",
                    help="instead: rare words of the same chapter or session as hotwords (names on screen)")
     p.add_argument("--variants", default=None, const=",".join(VARIANTS), nargs="?",
@@ -487,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
             test, name = hotwords_test, "hotwords"
         else:
             test = lambda *args: vad_test(*args, pause=a.pause, threshold=a.vad_threshold,  # noqa: E731
-                                          min_speech=a.min_speech)
+                                          min_speech=a.min_speech, max_gain=a.max_gain)
             name = f"vad{a.pause or ''}_{a.vad_threshold or ''}_{a.min_speech if a.min_speech is not None else ''}"
         summary = test(clips, Path(a.data_dir), model, log)
         common.save_json(common.REPO_ROOT / "checkpoints" / "hearings" / f"{a.set}.{name}.json", summary)
