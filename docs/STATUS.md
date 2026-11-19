@@ -55,7 +55,7 @@ Last updated: 2026-11-12 15:05 (both chats wrapped up. Clean-up: unsure flag, he
 ## In progress
 
 - Nothing from the clean-up model chat (GPU free, 2026-11-12 15:01).
-- Nothing from the Dictation chat (the Wispr Flow measurements ended 2026-11-19 12:20; GPU free of our jobs. DigiErhu was training on it all morning, about 6 GB, so our times from today are a little high).
+- Dictation chat: the personal voice experiment (Khang's OK 2026-11-19), **waiting for a free GPU**. A watcher checks every minute and starts only when no DigiErhu, engine, llama-server or other training runs and under 3 GB is in use, 3 checks in a row. Then about 30 min: score stock Whisper on the personal pack's 30 test clips, two LoRA runs on its 132 training clips (100 and 200 steps), export, score both. Log `checkpoints/personal/chain.log`; adapters in `checkpoints/personal-100/`, `personal-200/` (Khang's voice: stay on this PC). To stop it, end the PowerShell running `personal_chain.ps1` before it starts.
 
 ## Next
 
