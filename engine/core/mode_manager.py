@@ -217,6 +217,11 @@ class ModeManager:
         # Tests set it to a PersonalWords on a temporary file.
         self.personal_words = None
         self._last_taught = ""                   # the word just spelled or changed in: what "add that" adds
+        # Learning from fixes (Wispr Flow's auto-add; engine/voice/personal_fixes.py): the fixes and spellings made on
+        # this card, as (kind, heard, meant), kind "fix" / "spell". Learned when the card is typed, dropped with it.
+        self.personal_fixes = None
+        self._taught: list[tuple[str, str, str]] = []
+        self.learning = False                    # main.py turns it on with the real Whisper; tests use temporary files
         self._lock = threading.RLock()
         self._stop = threading.Event()
 
@@ -821,7 +826,8 @@ class ModeManager:
 
     def _add_to_preview(self, words: list[dict]) -> None:
         self._remember()
-        self.preview = self.preview + list(words)  # keep talking: new words join the bubble
+        words = self._apply_fixes(list(words))
+        self.preview = self.preview + words        # keep talking: new words join the bubble
         self._final = False                        # the whole passage goes to the clean-up again
         self._preview_changed()
 
@@ -871,6 +877,8 @@ class ModeManager:
         self._log(f'[edit] {edit.kind} "{edit.old}"' + (f' -> "{edit.new}"' if edit.kind == "replace" else ""))
         if edit.kind == "replace":
             self._last_taught = edit.new
+            spelled = re.search(r"\b(?:[A-Za-z][.,]?\s+){2,}[A-Za-z]\b", body) is not None
+            self._taught.append(("spell" if spelled else "fix", edit.old, edit.new))
         self._edit_preview(words, "Changed" if edit.kind == "replace" else "Deleted")
         return True
 
@@ -886,8 +894,67 @@ class ModeManager:
             return False
         self._log(f'[spell] "{word}"')
         self._last_taught = word
+        self._taught.append(("spell", "", word))
         self._edit_preview(commands.add_word(self._shown_words(), word), "Spelled")
         return True
+
+    def _word_store(self):
+        if self.personal_words is None:
+            from engine.voice.personal_words import PersonalWords
+            self.personal_words = PersonalWords()
+        return self.personal_words
+
+    def _fix_store(self):
+        if self.personal_fixes is None:
+            from engine.voice.personal_fixes import PersonalFixes
+            self.personal_fixes = PersonalFixes()
+        return self.personal_fixes
+
+    def _apply_fixes(self, words: list[dict]) -> list[dict]:
+        """New dictation with the user's learned fixes made ("waiter" -> "water" after they fixed it twice). The card
+        shows the result, so a wrong one is seen and can be changed back (which forgets the fix)."""
+        if not self.learning:
+            return words
+        try:
+            fixed, used = self._fix_store().apply(words)
+        except Exception as exc:                           # a broken list never stops dictation
+            self._log(f"[fixes] skipped: {exc}")
+            return words
+        if used:
+            self._log("[fixes] " + ", ".join(f'"{f.heard}" -> "{f.meant}"' for f in used))
+            self._status("info", "Used your fix: " + ", ".join(f"{f.heard} → {f.meant}" for f in used))
+        return fixed
+
+    def _learn(self, typed: str) -> None:
+        """The card is being typed, so its fixes and spellings were meant (Wispr Flow's "learn from corrections").
+        Each fix by voice is counted (made automatically from the second time); a spelled word, or a name or term
+        put in by a fix, joins the word list so Whisper leans toward it. Only what is still in the typed text."""
+        from engine.voice.personal_fixes import MIN_TIMES, key
+        from engine.voice.personal_words import worth_learning
+
+        taught, self._taught = self._taught, []
+        if not self.learning:
+            return
+        have = " ".join(key(typed))
+        learned: list[str] = []
+        for kind, heard, meant in taught:
+            if not meant or f" {' '.join(key(meant))} " not in f" {have} ":
+                continue                                   # taken back or changed again before typing
+            try:
+                if heard:
+                    fix = self._fix_store().record(heard, meant)
+                    if fix is not None and fix.times == MIN_TIMES:
+                        learned.append(f"{heard} → {meant} from now on")
+                if worth_learning(meant, spelled=kind == "spell"):
+                    store = self._word_store()
+                    if meant.lower() not in {w.lower() for w in store.words()}:
+                        saved = store.add(meant)
+                        learned.append(f'"{saved}" in your words')
+            except OSError as exc:
+                self._log(f"[learn] couldn't save: {exc}")
+        if learned:
+            self._log("[learn] " + "; ".join(learned))
+            self._status("info", "Learned: " + "; ".join(learned))
 
     def _word_list(self, text: str) -> bool:
         """ "add Hathaway to my words" / "add that to my words" / "remove Hathaway from my words": change the user's
@@ -950,6 +1017,7 @@ class ModeManager:
         self._pending = None
         text = self._preview_text()
         if text:
+            self._learn(text)
             self._os(topics.OS_TYPE, text=text + " ")
             self._typed = f"{self._typed} {text}".strip()[-CONTEXT_CHARS:]
             self.preview = []
@@ -1003,6 +1071,7 @@ class ModeManager:
         if not self.preview:
             self._use_clean = True                         # "use original" lasts for one preview
             self._history, self._final = [], False         # typed or dropped: nothing to take back
+            self._taught = []                              # a dropped card teaches nothing
         elif self._cleaning() and clean_up:
             self._rw_running = True
             self.bus.publish(topics.REWRITE_REQUEST,

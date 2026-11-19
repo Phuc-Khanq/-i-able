@@ -120,6 +120,9 @@ class Engine:
         #    (without eyes, mouth is None: no gate, every word counts)
         self.dictation = DictationWorker(bus, dictation or Dictation(settings), mouth=self.mouth,
                                          settings=settings)
+        # Learning from the user's fixes (their word list and data/voice/personal/fixes.txt): only with the real
+        # Whisper, as Dictation does for the word list; tests that pass their own dictation never touch those files
+        self.mode_manager.learning = dictation is None
         self.audio_in = AudioIn(bus, settings, sd=sd, mic_settings=mic_settings, vad=vad)
         self.audio_in.mouth = self.mouth             # a still mouth ends a clip, even in a noisy room (None: VAD only)
         self.voice_data = VoiceData(bus)             # "delete my voice data"

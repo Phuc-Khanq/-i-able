@@ -82,7 +82,9 @@ def render(settings=None) -> str:
               '| "scratch that" | Takes back the last thing you said or your last fix, one step at a time |', ""]
     lines += ["## Your words", "",
               "Names and terms the speech recogniser should lean toward. They help from the next sentence on. "
-              "\"Delete my voice data\" deletes the list.", "",
+              "A word you spell, or a name you put in with \"change\", joins the list by itself when the card is "
+              "typed. The same fix made twice (\"change waiter to water\") is made for you after that; change it "
+              "back to undo it. \"Delete my voice data\" deletes the list and the fixes.", "",
               "| Say | What it does |", "| --- | --- |",
               '| "add <word> to my words", "add H A T H A W A Y to my words" | Adds a word or name to your list |',
               '| "add that to my words" | Adds the word you just spelled or changed |',

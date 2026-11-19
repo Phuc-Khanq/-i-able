@@ -107,6 +107,25 @@ class PersonalWords:
             self._stamp = None                        # read it again next time
 
 
+# Words never worth a place on the list: Whisper knows them, and they are the usual "their/there" kind of fix.
+_NOT_LEARNED = set("""
+a an the and or but if so as at by for from in into of off on onto out over to too two up with about after before
+i i'm i'll i've i'd me my we our you your you're yours he him his she her they them their they're there here hear
+it it's its this that these those what which witch who whom whose where were we're when why how than then
+is are was be been am do does did done have has had will would wood can could should shall may might must
+no know now new knew not right write rite one won four fore see sea buy bye yes ok okay mr mrs ms dr
+""".split())
+
+
+def worth_learning(word: str, spelled: bool = False) -> bool:
+    """Should a word the user put on the card by hand join their list on its own (Wispr Flow's auto-add)?
+    A spelled word, or a name, acronym or term (a capital letter or a digit in it), unless it is a common word."""
+    w = _clean(word)
+    if len("".join(ch for ch in w if ch.isalnum())) < 2 or w.lower() in _NOT_LEARNED:
+        return False
+    return spelled or any(ch.isupper() or ch.isdigit() for ch in w)
+
+
 def combine(*hints: str) -> str | None:
     """Join hotword strings, skipping empty ones: None if nothing is left (Whisper's "no hotwords")."""
     joined = ", ".join(h.strip() for h in hints if h and h.strip())
