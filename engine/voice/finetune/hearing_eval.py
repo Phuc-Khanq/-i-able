@@ -210,6 +210,49 @@ def variants_test(clips, data_dir: Path, model, log, names=tuple(VARIANTS)) -> d
     return out
 
 
+def context_test(clips, data_dir: Path, model, log, max_words: int = 40) -> dict:
+    """Would names on screen help (Wispr Flow's context awareness)? For each clip, the rare words (4+ letters, more
+    than one Whisper token) of the OTHER clips of the same chapter or session go to Whisper as hotwords, like names
+    read off the screen. Reports WER without and with them, and how often this clip's own rare words that were in the
+    list come out right."""
+    import re
+    from collections import defaultdict
+
+    from engine.voice.dictation import Dictation, words_to_text
+
+    tok = model.hf_tokenizer
+
+    def rare(text: str) -> set[str]:
+        return {w for w in re.findall(r"[a-z']+", common.normalize(text)) if len(w) >= 4
+                and len(tok.encode(" " + w).ids) > 1}
+
+    by_key = defaultdict(list)
+    for c in clips:
+        by_key[context_key(c)].append(c)
+    plain = Dictation(model=model)
+    rows = []
+    for c in clips:
+        others = set().union(*(rare(o.text) for o in by_key[context_key(c)] if o is not c))
+        words = sorted(others)[:max_words]
+        audio = common.load_audio(c.audio_path(data_dir))
+        a = words_to_text(plain.transcribe(audio))
+        b = words_to_text(Dictation(model=model, hotwords=", ".join(words)).transcribe(audio)) if words else a
+        target = rare(c.text) & set(words)
+        rows.append((c, a, b, target, len(words)))
+    out = {}
+    for g in sorted({r[0].group for r in rows}) + ["all"]:
+        sel = [r for r in rows if g == "all" or r[0].group == g]
+        wa = common.wer_table([(r[0].text, r[1]) for r in sel])["wer"]
+        wb = common.wer_table([(r[0].text, r[2]) for r in sel])["wer"]
+        n = sum(len(r[3]) for r in sel)
+        hit = lambda i: sum(1 for r in sel for w in r[3] if w in common.normalize(r[i]).split())
+        out[g] = {"clips": len(sel), "wer_plain": wa, "wer_context": wb, "context_words_said": n,
+                  "right_plain": hit(1), "right_context": hit(2)}
+        log(f"{g} ({len(sel)} clips): WER without context words {wa}, with {wb}; this clip's own rare words that "
+            f"were in the list: {n}, right {hit(1)} without, {hit(2)} with")
+    return out
+
+
 def vad_test(clips, data_dir: Path, model, log, pause: float | None = None) -> dict:
     """Does the app's front door (audio_in.py: auto gain, Silero VAD, pre-roll, pads) lose speech before Whisper?
     Each clip goes through AudioIn as if from the mic (clips of one session in a row, so the gain adapts), with
@@ -338,6 +381,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--vad-test", action="store_true",
                    help="instead: the app's pass on what audio_in.py cuts from each clip, against the whole clip")
     p.add_argument("--pause", type=float, default=None, help="--vad-test: the pause setting to try, in seconds")
+    p.add_argument("--context-test", action="store_true",
+                   help="instead: rare words of the same chapter or session as hotwords (names on screen)")
     p.add_argument("--variants", default=None, const=",".join(VARIANTS), nargs="?",
                    help="instead: the app's pass with different decoding options (VARIANTS; a comma list picks some)")
     a = p.parse_args(argv)
@@ -357,8 +402,10 @@ def main(argv: list[str] | None = None) -> int:
     from engine.voice.whisper_import import faster_whisper
 
     model = faster_whisper().WhisperModel(resolve_model(a.model), device="cuda", compute_type="float16")
-    if a.hot_test or a.vad_test or a.variants:
-        if a.variants:
+    if a.hot_test or a.vad_test or a.variants or a.context_test:
+        if a.context_test:
+            test, name = context_test, "context"
+        elif a.variants:
             names = tuple(n.strip() for n in a.variants.split(",") if n.strip() in VARIANTS)
             test, name = (lambda *args: variants_test(*args, names=names)), "variants"
         elif a.hot_test:
