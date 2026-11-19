@@ -159,7 +159,8 @@ def hotwords_test(clips, data_dir: Path, model, log, words: str = HOT_TEST_WORDS
 
 
 VARIANTS = {
-    "app": {},                                                              # today: beam 1, temperature fallback
+    "app": {},                                                              # the app's pass as it is now (DECODE)
+    "fallback": {"log_prob_threshold": -1.0},                               # before 2026-11-19: re-decode when unsure
     "t0": {"temperature": 0.0},                                             # no fallback
     "t0_notok": {"temperature": 0.0, "without_timestamps": True},           # ...and no timestamp tokens
     "b5_t0_notok": {"beam_size": 5, "temperature": 0.0, "without_timestamps": True},
