@@ -98,6 +98,11 @@ TORGO dev's 115 sentences, without and with Whisper's other readings as "Other h
 So the hearings help a little with today's pass and mostly make the card's "Check this" honest: it now shows on 43%
 of the clean-up's wrong answers instead of 28% (with 8 right answers marked instead of 2).
 
+On TORGO dev's single words, as the card shows them with short unsure words kept (354 clips): Whisper 109.6% wrong,
+the clean-up alone 113.0% (worse), the clean-up with the other hearings 106.2% (better than Whisper; 18 better, 4
+worse) and marked unsure 194 times instead of 72. So short cards keep going to the clean-up, now with the hearings.
+Files: `checkpoints/hearings/torgo-dev.cleanup-raw-dys_words.*`.
+
 **For the clean-up chat:** on clear LibriSpeech book sentences (298) the clean-up takes WER from 1.50% to 3.28%. It
 changes the words of 76 sentences (25%) and makes 7 better. Only 8 of the 76 are its job (fillers like "You know",
 "Huh", a repeated "enough, enough"); the rest add small words ("the" 8 times, "is" 4), drop them ("and" 8 times) or
