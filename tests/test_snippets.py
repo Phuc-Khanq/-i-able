@@ -97,6 +97,12 @@ class TestByVoice(unittest.TestCase):
         self.say("Save this as a PDF.")
         self.assertEqual(self.shown(), "Insert the key into the lock. Save this as a PDF.")
 
+    def test_a_command_cant_be_a_snippet_name(self):
+        self.say("See you soon")
+        self.say("save this as a snippet called send it")
+        self.assertEqual(self.mm.snippets.all(), {})
+        self.assertTrue(any("is a command" in m["text"] for m in self.bus.ui(messages.STATUS)))
+
     def test_save_with_nothing_on_the_card(self):
         self.say("save this as a snippet called home")
         self.assertEqual(self.mm.snippets.all(), {})

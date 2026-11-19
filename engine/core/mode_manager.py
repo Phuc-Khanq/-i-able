@@ -951,6 +951,9 @@ class ModeManager:
                 if not words:
                     self._status("warn", f'Dictate the text first, then say "save this as {req.cue}"')
                     return True
+                if commands.normalize(req.cue) in commands.FIXED_COMMANDS:
+                    self._status("warn", f'"{req.cue}" is a command; pick another name for the snippet')
+                    return True                            # its cue said alone would never run the command again
                 cue = store.save(req.cue, " ".join(w["text"] for w in words))
                 self._log(f'[snippet] saved "{cue}"')
                 self._ui(messages.COMMAND, label="Snippet saved")
