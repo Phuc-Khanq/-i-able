@@ -32,6 +32,7 @@ SETS = {
     "torgo-test": ("test", "torgo"),
     "libri-dev": ("dev", "librispeech"),
     "libri-test": ("test", "librispeech"),
+    "personal-test": ("test", "personal"),                     # the personal pack (Khang's voice, his own mic)
 }
 CUTOFFS = (0.3, 0.5, 0.7, 0.8, 0.9)
 PROMPT_CHARS = 300          # the text before the cursor: the last sentences, cut at a word
