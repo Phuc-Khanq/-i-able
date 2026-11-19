@@ -431,7 +431,8 @@ def cleanup_compare(rows_path: Path, text_key: str, log,
         f"after the clean-up {summary['wer_cleanup']}, with other hearings {summary['wer_cleanup_hearings']}")
     log(f"hearings sent on {summary['with_hearings']}: better {summary['hearings_better']}, worse "
         f"{summary['hearings_worse']}; marked unsure {summary['unsure']} without, {summary['unsure_h']} with")
-    dest = rows_path.with_name(rows_path.stem + f".cleanup-{text_key}.jsonl")
+    tag = "" if set(groups) >= {"dys_seen", "librispeech"} else "-" + "-".join(groups)   # other groups: own file
+    dest = rows_path.with_name(rows_path.stem + f".cleanup-{text_key}{tag}.jsonl")
     with open(dest, "w", encoding="utf-8") as f:
         for x in out_rows:
             f.write(json.dumps(x, ensure_ascii=False) + "\n")
