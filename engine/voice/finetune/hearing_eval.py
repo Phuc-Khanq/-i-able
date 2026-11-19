@@ -407,18 +407,25 @@ def cleanup_compare(rows_path: Path, text_key: str, log,
     s.rewrite_backend = "llamacpp"
     rw = Rewriter(s, log=lambda *a: None)
     rw.load()
-    out_rows, n_words = [], 0
-    for r in rows:
-        text = r[text_key]
-        hears = [t for t, _ in r["readings"] if common.normalize(t) != common.normalize(text)][:2]
-        plain = rw.rewrite_full(text)
-        with_h = rw.rewrite_full(text, hearings=hears) if hears else plain
-        e_raw, n = errors(r["ref"], text)
-        out_rows.append({"ref": r["ref"], "text": text, "hearings": hears, "clean": plain.clean,
-                         "clean_h": with_h.clean, "unsure": plain.uncertain, "unsure_h": with_h.uncertain,
-                         "err_text": e_raw, "err_clean": errors(r["ref"], plain.clean)[0],
-                         "err_clean_h": errors(r["ref"], with_h.clean)[0], "words": n})
-        n_words += n
+    out_rows, n_words, fell_back = [], 0, 0
+    try:
+        for r in rows:
+            text = r[text_key]
+            hears = [t for t, _ in r["readings"] if common.normalize(t) != common.normalize(text)][:2]
+            plain = rw.rewrite_full(text)
+            with_h = rw.rewrite_full(text, hearings=hears) if hears else plain
+            fell_back += plain.reason is not None and str(plain.reason).startswith(("error", "light clean: model error"))
+            e_raw, n = errors(r["ref"], text)
+            out_rows.append({"ref": r["ref"], "text": text, "hearings": hears, "clean": plain.clean,
+                             "clean_h": with_h.clean, "unsure": plain.uncertain, "unsure_h": with_h.uncertain,
+                             "reason": plain.reason, "err_text": e_raw, "err_clean": errors(r["ref"], plain.clean)[0],
+                             "err_clean_h": errors(r["ref"], with_h.clean)[0], "words": n})
+            n_words += n
+    finally:
+        rw.close()                                     # one llama-server at a time: a second one fights for the GPU
+    if fell_back:
+        log(f"WARNING: the clean-up model failed on {fell_back} of {len(out_rows)} rows (fell back to the rule-based "
+            "clean-up); don't use these numbers")
     w = lambda k: round(100.0 * sum(x[k] for x in out_rows) / n_words, 2) if n_words else None
     with_any = [x for x in out_rows if x["hearings"]]
     summary = {"rows": len(out_rows), "words": n_words, "text_key": text_key,
