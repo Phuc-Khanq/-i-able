@@ -105,6 +105,12 @@ change words in 37 sentences ("wants" -> "want", "pravity" -> "depravity", "sign
 his predecessor" -> "persisted in his predecessor Chrysostom's"). Book prose isn't dictation, but it is the same
 over-editing as the 2026-11-05 "drop_small_words" finding. Rows: `checkpoints/hearings/libri-dev.cleanup-greedy.jsonl`.
 
+On Khang's own recordings (the personal pack's 29 test phrases, his mic): Whisper 10.0% wrong, the clean-up 13.3%,
+the clean-up with other hearings 11.7% (better on 4, worse on 2). Most of the clean-up's damage is on command phrases
+that in the app never reach it, but it shows the clean-up inventing words in short phrases: "refresh" -> "Please
+refresh the page.", "paste down" -> "Please paste the document down." (with the hearings: "Page down.", right), "Close
+tab." -> "Close the tab.". The guard lets these through. Rows: `checkpoints/hearings/personal-test.cleanup-greedy.jsonl`.
+
 **6. Short unsure words kept when the mouth moved (built: commit 8a29693).** The app's noise filter dropped every
 1-to-3-word result under 0.35 confidence. On TORGO dev's 355 single words it left 165 results empty; without it 99
 single words come out exactly right instead of 60. Now such a result goes to a dictation card (marked unsure) when the
