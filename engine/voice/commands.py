@@ -934,6 +934,48 @@ def parse_word_list(text: str) -> WordListChange | None:
     return WordListChange(kind, word) if word else None
 
 
+# ------------------------------------------------------------------ spoken punctuation (Wispr Flow's smart formatting)
+# "see you then comma Mom question mark" -> "see you then, Mom?". Only the clear cases: not after "a" / "the" ("a
+# comma", "the question mark"), and "period" only where a sentence can end (last word, or before a new sentence), never
+# after a word that makes it a length of time ("a trial period", "the period of").
+SPOKEN_MARKS = {("question", "mark"): "?", ("exclamation", "mark"): "!", ("exclamation", "point"): "!",
+                ("full", "stop"): ".", ("comma",): ",", ("period",): "."}
+_LITERAL_BEFORE = {"a", "the", "this", "that", "each", "every", "one", "any", "no", "trial", "grace", "waiting", "time",
+                   "rest", "same", "long", "short", "school", "class", "first", "second", "third", "last", "next",
+                   "menstrual", "free", "my", "your", "his", "her", "our", "their"}
+
+
+def spoken_punctuation(words: list[dict]) -> list[dict]:
+    """The card's words ({"text", "conf"}) with spoken punctuation turned into marks on the word before. Whisper's
+    own punctuation around the spoken one is dropped ("Hi, comma, how" -> "Hi, how"); a word after ".", "?" or "!"
+    starts with a capital. Words that aren't clear punctuation stay as they are."""
+    keys = [word_key(w["text"]) for w in words]
+    out: list[dict] = []
+    i = 0
+    while i < len(words):
+        mark, size = None, 0
+        for phrase, m in SPOKEN_MARKS.items():
+            if tuple(keys[i:i + len(phrase)]) == phrase:
+                mark, size = m, len(phrase)
+                break
+        prev = keys[i - 1] if i > 0 else ""
+        nxt = words[i + size]["text"] if mark and i + size < len(words) else ""
+        if (mark and out and prev not in _LITERAL_BEFORE
+                and (keys[i:i + 1] != ["period"] or not nxt or nxt[:1].isupper())):
+            last = dict(out[-1])
+            last["text"] = re.sub(r"[.,!?;:]+$", "", last["text"]) + mark
+            out[-1] = last
+            i += size
+            if mark in ".?!" and i < len(words):
+                nw = dict(words[i])
+                nw["text"] = nw["text"][:1].upper() + nw["text"][1:]
+                words = words[:i] + [nw] + words[i + 1:]
+            continue
+        out.append(dict(words[i]))
+        i += 1
+    return out
+
+
 # ------------------------------------------------------------------ the user's snippets (engine/voice/snippets.py)
 # "save this as my address" (the card's text becomes a snippet), "insert my address" (its text goes on the card),
 # "delete the snippet my address". Wispr Flow's snippets, made and used by voice.

@@ -830,7 +830,7 @@ class ModeManager:
 
     def _add_to_preview(self, words: list[dict]) -> None:
         self._remember()
-        words = self._apply_fixes(list(words))
+        words = self._apply_fixes(commands.spoken_punctuation(list(words)))
         self.preview = self.preview + words        # keep talking: new words join the bubble
         self._final = False                        # the whole passage goes to the clean-up again
         self._preview_changed()

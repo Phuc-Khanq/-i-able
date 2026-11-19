@@ -89,6 +89,10 @@ def render(settings=None) -> str:
               '| "add <word> to my words", "add H A T H A W A Y to my words" | Adds a word or name to your list |',
               '| "add that to my words" | Adds the word you just spelled or changed |',
               '| "remove <word> from my words" | Takes it off your list |', "",
+              "## Punctuation while dictating", "",
+              'Say "comma", "period" or "full stop", "question mark", "exclamation point". "Are you coming comma Mom '
+              'question mark" types "Are you coming, Mom?". After "a" or "the" they stay words ("put a comma '
+              'here"), and "period" only ends a sentence ("a trial period" stays).', "",
               "## Snippets", "",
               "Text you would otherwise dictate again and again (an address, an email, a sign-off). Dictate it once "
               "and fix it on the card, then save it.", "",
