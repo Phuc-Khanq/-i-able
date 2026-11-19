@@ -137,8 +137,9 @@ setting it wrote them 6 times and the list helped (108.7% -> 102.0%; sentences 2
 1.62%).
 
 **9. The front door: what `audio_in.py` loses before Whisper hears anything (measured).** Each TORGO dev clip was
-fed through AudioIn as if from the mic (auto gain, Silero VAD, pre-roll, pads; pause setting 1.5 s, no camera), then
-the app's pass ran on what it cut:
+fed through AudioIn as if from the mic (auto gain, Silero VAD, pre-roll, pads; no camera), then the app's pass ran on
+what it cut. This first run used the pause setting on Khang's PC, **1.0 s** (`config.local.json`; the default is
+1.5 s); at 1.5 s, 4 dev sentences were cut (28.4% wrong) instead of 22:
 
 | | Whole clip | What audio_in cut | No utterance at all | Cut into pieces |
 | --- | --- | --- | --- | --- |
@@ -148,8 +149,8 @@ the app's pass ran on what it cut:
 So for dysarthric speech the front door costs as much as the decoding fix gains: sentences with long pauses get cut
 into pieces that Whisper hears without their context, and some short, weak words never become an utterance.
 
-With the pause setting at 2.5 s no sentence was cut (27.4% on what was cut, against 32.7% at 1.5 s); 3 s was no
-better (27.2%). On the held-out test speakers (F04, M01, 801 clips): at 1.5 s, 8 of 184 sentences were cut and 43.9%
+With the pause setting at 2.5 s no sentence was cut (27.4% on what was cut, against 32.7% at 1.0 s and 28.4% at
+1.5 s); 3 s was no better (27.2%). On the held-out test speakers (F04, M01, 801 clips): at 1.5 s, 8 of 184 sentences were cut and 43.9%
 of words came out wrong on what audio_in cut (41.5% on whole clips); at 2.5 s none were cut and 41.7%. Proposed in
 DECISIONS (not decided): a 2.5 s pause for users who pause mid-sentence.
 
@@ -204,7 +205,8 @@ Start the demo as usual (`.\scripts\run_demo.ps1`), say "start dictation", then:
    "insert my address" (or "my address" alone) and "yes".
 5. **Punctuation:** "are you coming comma mom question mark" should show "are you coming, mom?".
 6. **Options:** when a word is unsure, the card may list other readings; "option two" takes one.
-7. **Pause setting:** if your sentences get cut in two, try the pause slider at 2.5 s.
+7. **Pause setting:** this PC's `config.local.json` sets 1.0 s, which cut 22 of TORGO dev's 115 dysarthric
+   sentences in pieces. If your sentences get cut in two, try the pause slider at 2.5 s.
 
 Switches in `config.local.json` if something misbehaves in a demo: `"whisper_hearings": false` (no extra pass, no
 options), `"show_unsure_short": false` (short unsure words dropped as before), `"vad_threshold": 0.3` (to try hearing a
@@ -214,8 +216,8 @@ ignores them); "delete my voice data" removes them.
 ## Not done, for later
 
 - Re-hear the whole passage: when a sentence came in pieces, transcribe the pieces' audio again as one clip after the
-  user goes quiet (in memory only). Measured gain on cut sentences: 32.7% -> 26.0%. The 2.5 s pause gets most of it
-  more simply.
+  user goes quiet. **Measured, not worth building:** at 1.5 s it recovers only part of the loss (held-out sentences
+  29.0% -> 28.2%; whole clips 27.5%), while a 2.5 s pause recovers all of it (27.4%).
 - Names on screen as Whisper hotwords (Wispr's context awareness): **measured, not worth it with stock Whisper.**
   Proxy: each clip got the rare words (4+ letters, more than one Whisper token, up to 40) of the other clips of its
   chapter or session as hotwords, like names read off the screen (`hearing_eval.py --context-test`). LibriSpeech dev:
