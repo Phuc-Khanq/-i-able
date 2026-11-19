@@ -88,6 +88,23 @@ class PersonalWords:
         self._write(words[-MAX_WORDS:])
         return w
 
+    def touch(self, text: str) -> list[str]:
+        """The user just typed `text`: words of the list that are in it move to the newest end, so the ones in use
+        always fit in Whisper's hint (Wispr Flow ranks its dictionary by use). Returns the words moved; the file is
+        only written when the order changes."""
+        words = self.words()
+        if not words:
+            return []
+        low = " " + " ".join(str(text).lower().replace("’", "'").split()) + " "
+        low = "".join(ch if ch.isalnum() or ch in " '" else " " for ch in low)
+        used = [w for w in words if f" {w.lower()} " in low]
+        if not used:
+            return []
+        new = [w for w in words if w not in used] + used
+        if new != words:
+            self._write(new)
+        return used
+
     def remove(self, word: str) -> bool:
         """Remove a word (any capitals). False if it wasn't on the list."""
         w = _clean(word).lower()

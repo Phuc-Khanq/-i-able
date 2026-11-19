@@ -81,6 +81,16 @@ class TestPersonalFixes(Temp):
         self.assertEqual(personal_fixes.FIXES_FILE.parent, voice_data.PERSONAL_DIR)
 
 
+class TestTouch(Temp):
+    def test_touch(self):
+        for w in ("Khoa Nhi", "AFO", "B12"):
+            self.words.add(w)
+        self.assertEqual(self.words.touch("Call khoa nhi, then take B12."), ["Khoa Nhi", "B12"])
+        self.assertEqual(self.words.words(), ["AFO", "Khoa Nhi", "B12"])
+        self.assertEqual(self.words.touch("nothing here"), [])
+        self.assertEqual(self.words.touch("AFOs are not AFO"), ["AFO"])          # whole words only
+
+
 class TestWorthLearning(unittest.TestCase):
     def test_names_terms_and_spelled_words(self):
         self.assertTrue(worth_learning("Hathaway"))
@@ -148,6 +158,14 @@ class TestByVoice(Temp):
         self.say("change Hawthorne to Hathaway")
         self.say("yes")
         self.assertEqual(self.words.words(), ["Hathaway"])
+
+    def test_words_in_use_move_to_the_newest_end(self):
+        for w in ("Hathaway", "AFO", "prednisone"):
+            self.words.add(w)
+        self.say("Ask Hathaway about the AFO.")
+        self.say("yes")
+        self.assertEqual(self.words.words(), ["prednisone", "Hathaway", "AFO"])
+        self.assertTrue(self.words.hint().startswith("AFO, Hathaway"))
 
     def test_off_unless_the_app_turns_it_on(self):
         mm = ModeManager(FakeBus(), log=lambda *_: None)

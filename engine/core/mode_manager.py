@@ -1036,6 +1036,10 @@ class ModeManager:
         if learned:
             self._log("[learn] " + "; ".join(learned))
             self._status("info", "Learned: " + "; ".join(learned))
+        try:
+            self._word_store().touch(typed)                # words in use stay in Whisper's hint as the list grows
+        except OSError as exc:
+            self._log(f"[learn] couldn't save: {exc}")
 
     def _word_list(self, text: str) -> bool:
         """ "add Hathaway to my words" / "add that to my words" / "remove Hathaway from my words": change the user's
