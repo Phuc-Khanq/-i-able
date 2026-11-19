@@ -230,6 +230,24 @@ ignores them); "delete my voice data" removes them.
   the LibriSpeech over-editing above.
 - Real dysarthric recordings (the Speech Accessibility Project proposal) stay the biggest lever: every number here is
   stock Whisper on someone else's voice.
+- **Your own voice (Wispr's "personalized ASR"), ready to run when the GPU is free:** adapt Whisper to one person
+  with the personal pack already on this PC (132 clips, 11.9 min of Khang's voice; stock Whisper gets 10.4% of the 30
+  test clips' words wrong). If a short adapter run brings that down clearly, a "read 50 phrases" step in onboarding is
+  worth building (`engine/voice/finetune/record_pack.py` already records the phrases). About 15 min of GPU, not
+  started because DigiErhu was training all day:
+
+  `.\.venv\Scripts\python.exe -m engine.voice.finetune.train --name personal-only --main-sources personal --typical-sources librispeech --lr 1e-4 --max-steps 400 --patience 1000 --typical-mix 0.25`
+
+  then export `checkpoints\personal-only\last` and score `--groups personal` with `evaluate.py`, as for the sim runs.
+
+## For the Speech Accessibility Project proposal (paste if useful)
+
+Measured on Khang's PC with stock Whisper large-v3-turbo, the speech model most dictation tools build on: on two
+dysarthric speakers it has never been tuned on (TORGO test, F04 and M01, 801 clips) it gets 41.5% of words wrong,
+against 1.5% on clear read speech (LibriSpeech). Everything we could do in software around it (decoding settings,
+keeping unsure words the camera saw the user say, several readings for the user to pick from) brings that to 39.9%. The
+remaining gap is the model's hearing of dysarthric speech, which only training on consented dysarthric recordings can
+close; no openly licensed set allows commercial use (checked 2026-11-10).
 
 ## Sources
 
