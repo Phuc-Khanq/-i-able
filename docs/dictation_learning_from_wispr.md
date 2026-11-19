@@ -169,8 +169,11 @@ fix. After them: 0 right, 1 wrong, WER unchanged. The gain is meant for names an
 only real use can show.
 
 **11. Whisper's other hearings as card options (commit 431e63d).** When the clean-up gives no other readings, or is
-off, the card numbers Whisper's other hearings, so "option two" can fix a misheard word (right on 22% of TORGO dev's
-wrong clips). **12. The word list ranked by use (commit 88e173a):** words typed move to the end Whisper gets first.
+off, the card numbers Whisper's other hearings, so "option two" can fix a misheard word. Counted on what the card would
+show (TORGO dev, short unsure words kept, options only when a word is under 0.5): one of the two options is exactly
+right on 32 of 328 wrong answers (10%; single words 12%, sentences 3%, where a whole sentence rarely comes out exactly
+right). The 22% in step 0 above also counts clips where the app showed nothing; the commit message's 22% should be
+read that way. **12. The word list ranked by use (commit 88e173a):** words typed move to the end Whisper gets first.
 
 ## Held-out check and what the app does now
 
