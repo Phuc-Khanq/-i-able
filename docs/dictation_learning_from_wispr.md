@@ -149,9 +149,28 @@ So for dysarthric speech the front door costs as much as the decoding fix gains:
 into pieces that Whisper hears without their context, and some short, weak words never become an utterance.
 
 With the pause setting at 2.5 s no sentence was cut (27.4% on what was cut, against 32.7% at 1.5 s); 3 s was no
-better (27.2%). Proposed in DECISIONS (not decided): a 2.5 s pause for users who pause mid-sentence. The missed short
-words (43 to 48 of 355 at every pause setting) are a VAD threshold question; not changed, because a lower threshold
-lets in coughs and noise and there is no noise set to measure that against yet.
+better (27.2%). On the held-out test speakers (F04, M01, 801 clips): at 1.5 s, 8 of 184 sentences were cut and 43.9%
+of words came out wrong on what audio_in cut (41.5% on whole clips); at 2.5 s none were cut and 41.7%. Proposed in
+DECISIONS (not decided): a 2.5 s pause for users who pause mid-sentence.
+
+The missed short words are this one speaker's quiet voice: Silero's threshold 0.35 recovered 5 of them and 0.25
+recovered 13 (43 -> 30 never heard; the words-wrong rate on what was cut then matches the whole clip), while the held-out
+speakers lost only 2 words at any threshold. The shortest-utterance limit isn't the cause (0.1 s: still 43). A lower
+threshold may let in coughs and room noise and keep utterances from ending in a noisy room, which can't be measured
+offline, so the default stays 0.5 and a new setting, `vad_threshold`, lets a quiet speaker try 0.3 with the camera on
+(commit 68f8adc).
+
+**10. Learning from fixes, replayed on TORGO dev.** `hearing_eval.py --fix-sim` replays a speaker's clips in recording
+order as if the user fixed every wrong word by voice. Learned fixes rarely fired, and at first were wrong more often
+than right (2 right, 4 wrong: "that" -> "the", and minimal pairs like "shoot" -> "suit"), because TORGO's word lists
+don't repeat a speaker's own vocabulary the way daily use does. Two safety rules came from it (commit 2028fcf): a pair
+with a single common word on either side is never learned, and typing a fix's heard word as it was counts against the
+fix. After them: 0 right, 1 wrong, WER unchanged. The gain is meant for names and terms people say every day, which
+only real use can show.
+
+**11. Whisper's other hearings as card options (commit 431e63d).** When the clean-up gives no other readings, or is
+off, the card numbers Whisper's other hearings, so "option two" can fix a misheard word (right on 22% of TORGO dev's
+wrong clips). **12. The word list ranked by use (commit 88e173a):** words typed move to the end Whisper gets first.
 
 ## Held-out check and what the app does now
 
