@@ -93,6 +93,10 @@ class Settings:
     whisper_compute_type: str = "float16"  # use "int8" on CPU
     whisper_hotwords: str = ""     # words Whisper should lean toward, e.g. "pause yes no": try them with
                                    # python -m engine.voice.command_bench --hotwords "..." before setting them here
+    whisper_hearings: bool = True  # when a word is unsure, a second pass gets Whisper's other readings for the clean-up
+                                   # and the card's "option two" (about 120 ms; docs/dictation_learning_from_wispr.md)
+    show_unsure_short: bool = True  # a 1-3 word result Whisper is unsure of goes to a dictation card (marked unsure)
+                                    # when the camera saw your mouth say it; off: dropped as noise, as before
     # Only the user's voice: keep a word only if the camera saw the mouth moving as it was said
     mouth_gate: bool = True
     mouth_gate_mode: str = "utterance"  # "utterance": keep or drop the whole utterance; "word": each word on its own

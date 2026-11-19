@@ -346,6 +346,11 @@ class ModeManager:
         with self._lock:
             self.tick()
             words = transcript.get("words") or [{"text": w, "conf": 1.0} for w in transcript["text"].split()]
+            # Whisper's other hearings of this utterance wait until all its words are on the card (_hearing_versions);
+            # set for every transcript, so an older one can never attach to these words
+            others = [str(h) for h in transcript.get("hearings") or [] if str(h).strip()]
+            self._heard_new = (len(self.preview), len(words), others) if others and self.mode == Mode.DICTATION \
+                else None
             if transcript.get("unsure"):
                 # A short result Whisper was unsure of, kept because the camera saw the user say it: it may go on a
                 # dictation card (marked unsure there), but it never runs a command or answers a question
@@ -399,8 +404,6 @@ class ModeManager:
                         return
                     self._do(whole)
                     return
-            heard = [str(h) for h in transcript.get("hearings") or [] if str(h).strip()]
-            self._heard_new = (len(self.preview), len(words), heard) if heard and self.mode == Mode.DICTATION else None
             done, last, i = False, None, 0
             while i < len(clauses):
                 c = clauses[i]
