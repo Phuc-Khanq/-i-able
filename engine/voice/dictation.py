@@ -90,7 +90,11 @@ class Dictation:
 
     def current_hotwords(self) -> str | None:
         """What Whisper leans toward for the next utterance: the user's words (newest first), then
-        settings.whisper_hotwords. A list that can't be read is skipped, never an error."""
+        settings.whisper_hotwords. A list that can't be read is skipped, never an error.
+
+        Safe only without the temperature fallback's random re-decoding (DECODE): with it, a 30-word list was
+        written into TORGO dev's single words 112 times (WER 118.5% -> 141.0%); without it 6 times, and the list
+        helps (108.7% -> 102.0%; sentences 26.0% -> 25.9%; LibriSpeech 1.50% -> 1.62%; hearing_eval.py --hot-test)."""
         if self.personal_words is None:
             return self.hotwords
         from engine.voice.personal_words import combine

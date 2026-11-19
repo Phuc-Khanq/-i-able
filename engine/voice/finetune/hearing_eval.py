@@ -127,23 +127,34 @@ HOT_TEST_WORDS = ("Hathaway, prednisone, AFO, Khoa Nhi, Gainesville, Alvarez, ga
 def hotwords_test(clips, data_dir: Path, model, log, words: str = HOT_TEST_WORDS) -> dict:
     """Does a word list the user isn't saying cost accuracy? The app's pass with and without these hotwords (a
     plausible personal list of names and terms, none of them in the test sentences)."""
-    from engine.voice.dictation import Dictation, words_to_text
+    import tempfile
 
-    plain, hot = Dictation(model=model), Dictation(model=model, hotwords=words)
+    from engine.voice.dictation import Dictation, words_to_text
+    from engine.voice.personal_words import PersonalWords
+
+    tmp = tempfile.TemporaryDirectory()
+    pw = PersonalWords(Path(tmp.name) / "words.txt")
+    for w in words.split(","):
+        pw.add(w)
+    plain = Dictation(model=model)
+    app = Dictation(model=model, personal_words=pw)              # the app's path for the user's word list
     rows = []
     for c in clips:
         audio = common.load_audio(c.audio_path(data_dir))
-        rows.append((c, words_to_text(plain.transcribe(audio)), words_to_text(hot.transcribe(audio))))
+        rows.append((c, *(words_to_text(d.transcribe(audio)) for d in (plain, app))))
+    tmp.cleanup()
+    listed = {w.strip().lower() for w in words.split(",")}
     out = {}
-    for g in sorted({c.group for c, _, _ in rows}) + ["all"]:
+    for g in sorted({r[0].group for r in rows}) + ["all"]:
         sel = [r for r in rows if g == "all" or r[0].group == g]
-        a = common.wer_table([(c.text, p) for c, p, _ in sel])
-        b = common.wer_table([(c.text, h) for c, _, h in sel])
-        listed = {w.strip().lower() for w in words.split(",")}
-        leaked = sum(1 for _, _, h in sel for w in common.words(h.lower()) if w in listed)
-        out[g] = {"clips": len(sel), "wer_plain": a["wer"], "wer_hotwords": b["wer"], "list_words_inserted": leaked}
-        log(f"{g}: {len(sel)} clips, WER without the list {a['wer']}, with it {b['wer']}; list words written "
-            f"{leaked} times")
+        out[g] = {"clips": len(sel)}
+        parts = []
+        for i, name in ((1, "no list"), (2, "with the list")):
+            w = common.wer_table([(r[0].text, r[i]) for r in sel])["wer"]
+            leaked = sum(1 for r in sel for x in common.words(r[i].lower()) if x in listed)
+            out[g][name] = {"wer": w, "list_words_written": leaked}
+            parts.append(f"{name} {w} (list words {leaked})")
+        log(f"{g} ({len(sel)} clips): " + "; ".join(parts))
     return out
 
 
@@ -160,6 +171,7 @@ VARIANTS = {
     "b5_t0_keep": {"beam_size": 5, "temperature": 0.0, "keep_short": True},
     # the fallback only for repetition loops (compression ratio), not for "unsure" (log probability)
     "nolp": {"log_prob_threshold": None},
+    "nolp_keep": {"log_prob_threshold": None, "keep_short": True},
     "b5_nolp": {"beam_size": 5, "log_prob_threshold": None},
     "b5_nolp_keep": {"beam_size": 5, "log_prob_threshold": None, "keep_short": True},
 }
@@ -197,15 +209,22 @@ def variants_test(clips, data_dir: Path, model, log, names=tuple(VARIANTS)) -> d
     return out
 
 
-def vad_test(clips, data_dir: Path, model, log) -> dict:
+def vad_test(clips, data_dir: Path, model, log, pause: float | None = None) -> dict:
     """Does the app's front door (audio_in.py: auto gain, Silero VAD, pre-roll, pads) lose speech before Whisper?
     Each clip goes through AudioIn as if from the mic (clips of one session in a row, so the gain adapts), with
-    silence after it to end the utterance. Compares the app's pass on what AudioIn cut against the whole clip."""
+    silence after it to end the utterance. Compares the app's pass on what AudioIn cut against the whole clip.
+    `pause`: the user's pause setting in seconds (default: settings.pause_seconds)."""
+    import copy
     import itertools
 
     import numpy as np
 
-    from engine.config import settings
+    from engine.config import settings as base
+
+    settings = copy.copy(base)
+    if pause:
+        settings.pause_seconds = pause
+    log(f"pause_seconds {settings.pause_seconds}")
     from engine.core import topics
     from engine.voice import audio_in
     from engine.voice.dictation import Dictation, words_to_text
@@ -249,7 +268,7 @@ def vad_test(clips, data_dir: Path, model, log) -> dict:
                   "split": split}
         log(f"{g}: {len(sel)} clips, WER on the whole clip {a['wer']}, on what audio_in cut {b['wer']}; "
             f"no utterance at all {missed}, cut in pieces {split}")
-    dest = common.REPO_ROOT / "checkpoints" / "hearings" / "vad_rows.jsonl"
+    dest = common.REPO_ROOT / "checkpoints" / "hearings" / f"vad_rows_{settings.pause_seconds}.jsonl"
     with open(dest, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -317,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="instead: the app's pass with and without a word list the speaker isn't saying")
     p.add_argument("--vad-test", action="store_true",
                    help="instead: the app's pass on what audio_in.py cuts from each clip, against the whole clip")
+    p.add_argument("--pause", type=float, default=None, help="--vad-test: the pause setting to try, in seconds")
     p.add_argument("--variants", default=None, const=",".join(VARIANTS), nargs="?",
                    help="instead: the app's pass with different decoding options (VARIANTS; a comma list picks some)")
     a = p.parse_args(argv)
@@ -340,8 +360,10 @@ def main(argv: list[str] | None = None) -> int:
         if a.variants:
             names = tuple(n.strip() for n in a.variants.split(",") if n.strip() in VARIANTS)
             test, name = (lambda *args: variants_test(*args, names=names)), "variants"
+        elif a.hot_test:
+            test, name = hotwords_test, "hotwords"
         else:
-            test, name = (hotwords_test, "hotwords") if a.hot_test else (vad_test, "vad")
+            test, name = (lambda *args: vad_test(*args, pause=a.pause)), f"vad{a.pause or ''}"
         summary = test(clips, Path(a.data_dir), model, log)
         common.save_json(common.REPO_ROOT / "checkpoints" / "hearings" / f"{a.set}.{name}.json", summary)
         return 0
