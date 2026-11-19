@@ -131,6 +131,8 @@ test speakers (F04 and M01, 801 clips) keeping them takes WER from 41.5% to 39.9
   sentences 27.5% -> 28.4%), so the app stays at beam 1.
 - Without the loop check, beam 5 repeats words ("BIT BIT BIT ..."); without timestamp tokens, transcribe() repeats
   whole sentences. Neither is used.
+- On Khang's own recordings through his mic (the personal pack's 30 test clips) every setting gives 10.37%: the new
+  decoding costs a typical voice nothing and is a little faster (p50 158 ms against 174 ms).
 
 **8. Is the word list safe? (measured; nothing to change now).** A 30-word list the speaker isn't saying (names,
 medications, apps), through the app's path. With the old fallback, Whisper wrote list words into TORGO dev's single
