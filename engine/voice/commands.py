@@ -934,6 +934,66 @@ def parse_word_list(text: str) -> WordListChange | None:
     return WordListChange(kind, word) if word else None
 
 
+# ------------------------------------------------------------------ the user's snippets (engine/voice/snippets.py)
+# "save this as my address" (the card's text becomes a snippet), "insert my address" (its text goes on the card),
+# "delete the snippet my address". Wispr Flow's snippets, made and used by voice.
+SNIPPET_NOUNS = {"snippet", "shortcut"}
+
+
+@dataclass(frozen=True)
+class SnippetRequest:
+    kind: str     # "save", "insert" or "delete"
+    cue: str
+
+
+def parse_snippet(text: str) -> SnippetRequest | None:
+    """ "save this as a snippet called <cue>" / "make this a snippet called <cue>", "insert <cue>" / "insert the
+    snippet <cue>", "delete the snippet <cue>" / "forget the snippet <cue>", as a whole utterance. A cue is 1 to 5
+    words."""
+    from engine.voice.snippets import MAX_CUE_WORDS
+
+    raw = _request_words(text)
+    if len(raw) > 1 and word_key(raw[-1]) == "please":
+        raw = raw[:-1]
+    keys = [k for k in (word_key(w) for w in raw) if k]
+    if len(keys) < 2:
+        return None
+
+    def after_noun(rest: list[str]) -> str:
+        """The cue after "(a|the) snippet (called|named)": "" if there's no snippet noun up front."""
+        i = 0
+        while i < len(rest) and rest[i] in ("a", "the", "my"):
+            i += 1
+        if i >= len(rest) or rest[i] not in SNIPPET_NOUNS:
+            return ""
+        rest = rest[i + 1:]
+        if rest and rest[0] in ("called", "named", "for"):
+            rest = rest[1:]
+        return " ".join(rest) if 0 < len(rest) <= MAX_CUE_WORDS else ""
+
+    # Saving needs the word "snippet", so dictating "Save this as a PDF." is never taken for it.
+    if keys[0] in ("save", "store", "make") and len(keys) >= 3:
+        if keys[1] in ("this", "that", "it"):
+            rest = keys[3:] if len(keys) > 2 and keys[2] == "as" else keys[2:]
+        else:
+            rest = keys[1:]                                    # "save a snippet called my address"
+        cue = after_noun(rest)
+        return SnippetRequest("save", cue) if cue else None
+    if keys[0] in ("insert", "paste") and keys[1] not in ("it", "this", "that"):
+        rest = keys[1:]
+        if rest and rest[0] in ("the", "my") and len(rest) > 1 and rest[1] in SNIPPET_NOUNS:
+            rest = rest[2:]
+        elif rest and rest[0] in SNIPPET_NOUNS:
+            rest = rest[1:]
+        cue = " ".join(rest) if 0 < len(rest) <= MAX_CUE_WORDS else ""
+        return SnippetRequest("insert", cue) if cue else None
+    if keys[0] in ("delete", "remove", "forget") and any(k in SNIPPET_NOUNS for k in keys[1:3]):
+        i = next(i for i, k in enumerate(keys) if k in SNIPPET_NOUNS)
+        cue = " ".join(k for k in keys[i + 1:] if k not in ("called", "named"))
+        return SnippetRequest("delete", cue) if cue and len(cue.split()) <= MAX_CUE_WORDS else None
+    return None
+
+
 def add_word(words: list[dict], word: str) -> list[dict]:
     """The card's words with `word` added at the end (conf 1.0: the user spelled it). It takes a sentence's
     capital when it starts one; a sentence-ending period on the last word stays there."""

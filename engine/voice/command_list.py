@@ -88,7 +88,15 @@ def render(settings=None) -> str:
               "| Say | What it does |", "| --- | --- |",
               '| "add <word> to my words", "add H A T H A W A Y to my words" | Adds a word or name to your list |',
               '| "add that to my words" | Adds the word you just spelled or changed |',
-              '| "remove <word> from my words" | Takes it off your list |', ""]
+              '| "remove <word> from my words" | Takes it off your list |', "",
+              "## Snippets", "",
+              "Text you would otherwise dictate again and again (an address, an email, a sign-off). Dictate it once "
+              "and fix it on the card, then save it.", "",
+              "| Say | What it does |", "| --- | --- |",
+              '| "save this as a snippet called my address" | Saves the card\'s text as the snippet "my address" |',
+              '| "insert my address" (or "my address" said alone while dictating) | Puts the saved text on the card; '
+              '"yes" types it |',
+              '| "delete the snippet my address" | Deletes it |', ""]
     apps = ", ".join(sorted(settings.launch_apps))
     sites = ", ".join(sorted(settings.launch_sites))
     lines += ["## Apps and sites", "", "| Say | What it does |", "| --- | --- |",

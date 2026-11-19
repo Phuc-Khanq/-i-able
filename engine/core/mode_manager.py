@@ -222,6 +222,7 @@ class ModeManager:
         self.personal_fixes = None
         self._taught: list[tuple[str, str, str]] = []
         self.learning = False                    # main.py turns it on with the real Whisper; tests use temporary files
+        self.snippets = None                     # the user's snippets (engine/voice/snippets.py), made on first use
         self._lock = threading.RLock()
         self._stop = threading.Event()
 
@@ -350,6 +351,9 @@ class ModeManager:
             if (not self.question and self.mode in (Mode.DICTATION, Mode.POINTER)
                     and self._word_list(transcript["text"])):
                 return                        # "add Hathaway to my words"
+            if (not self.question and self.mode in (Mode.DICTATION, Mode.POINTER)
+                    and self._snippet(transcript["text"])):
+                return                        # "save this as my address" / "insert my address"
             if (self.preview and not self.question and self.mode in (Mode.DICTATION, Mode.POINTER)
                     and self._voice_edit(transcript["text"])):
                 return                        # "change Hawthorne to Hathaway" fixed the card
@@ -897,6 +901,64 @@ class ModeManager:
         self._taught.append(("spell", "", word))
         self._edit_preview(commands.add_word(self._shown_words(), word), "Spelled")
         return True
+
+    def _snippet(self, text: str) -> bool:
+        """Snippets (engine/voice/snippets.py; Wispr Flow's idea): "save this as my address" saves the card's text;
+        "insert my address", or "my address" said alone while dictating, puts the saved text on the card as saved
+        (no clean-up of it), and "yes" types it; "delete the snippet my address". True if it was one."""
+        body, _ = launch.strip_trigger(text)
+        req = commands.parse_snippet(body)
+        if req is None:
+            if self.mode != Mode.DICTATION or (self.snippets is None and not self.learning):
+                return False
+            from engine.voice.snippets import cue_key
+            k = cue_key(body)
+            if not k or len(k.split()) > 5:
+                return False
+            try:
+                saved = self._snippet_store().get(k)
+            except Exception:
+                return False
+            if saved is None:
+                return False
+            req = commands.SnippetRequest("insert", k)
+        try:
+            store = self._snippet_store()
+            if req.kind == "save":
+                words = self._shown_words()
+                if not words:
+                    self._status("warn", f'Dictate the text first, then say "save this as {req.cue}"')
+                    return True
+                cue = store.save(req.cue, " ".join(w["text"] for w in words))
+                self._log(f'[snippet] saved "{cue}"')
+                self._ui(messages.COMMAND, label="Snippet saved")
+                self._status("info", f'Saved. Say "insert {cue}" to use it')
+            elif req.kind == "insert":
+                saved = store.get(req.cue)
+                if saved is None:
+                    if self.mode == Mode.DICTATION and not set(commands.normalize(body).split()) & \
+                            commands.SNIPPET_NOUNS:
+                        return False               # "Insert the key into the lock." is dictation
+                    self._status("warn", f'No snippet called "{req.cue}"')
+                    return True
+                self._log(f'[snippet] "{req.cue}"')
+                new = [{"text": t, "conf": 1.0} for t in saved.split()]
+                self._edit_preview(self._shown_words() + new, "Snippet")
+            elif store.remove(req.cue):
+                self._log(f'[snippet] deleted "{req.cue}"')
+                self._status("info", f'Deleted the snippet "{req.cue}"')
+            else:
+                self._status("warn", f'No snippet called "{req.cue}"')
+        except OSError as exc:
+            self._log(f"[snippet] couldn't save: {exc}")
+            self._status("error", "Couldn't save your snippet")
+        return True
+
+    def _snippet_store(self):
+        if self.snippets is None:
+            from engine.voice.snippets import Snippets
+            self.snippets = Snippets()
+        return self.snippets
 
     def _word_store(self):
         if self.personal_words is None:
