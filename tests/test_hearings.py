@@ -52,6 +52,16 @@ class TestWorker(unittest.TestCase):
         w.process("meet at the bank? today")
         self.assertEqual(self.transcript()["hearings"], ["Meet at the bench today.", "Meet at the bend today."])
 
+    def test_not_outside_dictation(self):
+        w = self.make({"click the bank? button": ["Click the bench button."]})
+        w.on_ui({"type": "mode", "mode": "pointer"})
+        w.process("click the bank? button")
+        self.assertNotIn("hearings", self.transcript())
+        self.assertEqual(self.d.calls, 0)                                   # a command never waits for them
+        w.on_ui({"type": "mode", "mode": "dictation"})
+        w.process("click the bank? button")
+        self.assertEqual(self.transcript()["hearings"], ["Click the bench button."])
+
     def test_sure_words_skip_the_extra_pass(self):
         w = self.make({"meet at the bank today": ["Meet at the bench today."]})
         w.process("meet at the bank today")

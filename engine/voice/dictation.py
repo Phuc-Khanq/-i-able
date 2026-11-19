@@ -470,6 +470,8 @@ class DictationWorker:
         best. None for clips over 30 s, or if the extra pass fails (dictation goes on without them)."""
         if not self.send_hearings or min(w["conf"] for w in words) >= HEARINGS_BELOW or _seconds(audio) > 30:
             return []
+        if self._mode and self._mode != "dictation":
+            return []                          # only a dictation card uses them: a command shouldn't wait for them
         t0 = time.perf_counter()
         try:
             readings = self.dictation.hearings(audio)
