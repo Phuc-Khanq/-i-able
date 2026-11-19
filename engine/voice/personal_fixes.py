@@ -105,6 +105,24 @@ class PersonalFixes:
         self._write([f for f in fixes if key(f.heard) != key(heard)] + [new])
         return new
 
+    def kept(self, typed: str) -> list[Fix]:
+        """The user typed `typed` as it was: a fix's heard words in it were right this time, so each such fix counts
+        one less, and goes at zero (Wispr: decide which edits should not be repeated). Returns the fixes weakened."""
+        have = f" {' '.join(key(typed))} "
+        fixes = self.fixes()
+        hit = [f for f in fixes if f" {' '.join(key(f.heard))} " in have]
+        if not hit:
+            return []
+        keep = []
+        for f in fixes:
+            if f in hit:
+                f = Fix(f.heard, f.meant, f.times - 1)
+                if f.times <= 0:
+                    continue
+            keep.append(f)
+        self._write(keep)
+        return hit
+
     def forget(self, heard: str) -> bool:
         fixes = self.fixes()
         kept = [f for f in fixes if key(f.heard) != key(heard)]
@@ -158,8 +176,14 @@ class PersonalFixes:
 
 
 def _ok(heard: str, meant: str) -> bool:
+    """A pair worth learning: 1 to MAX_WORDS words on each side, different, and neither side a single common word
+    ("that" -> "the" would be made everywhere: in a replay of TORGO dev it was right 2 times in 6)."""
+    from engine.voice.personal_words import _NOT_LEARNED
+
     kh, km = key(heard), key(meant)
-    return bool(kh) and bool(km) and kh != km and len(kh) <= MAX_WORDS and len(km) <= MAX_WORDS
+    if not kh or not km or kh == km or len(kh) > MAX_WORDS or len(km) > MAX_WORDS:
+        return False
+    return not ((len(kh) == 1 and kh[0] in _NOT_LEARNED) or (len(km) == 1 and km[0] in _NOT_LEARNED))
 
 
 def _span(keys: list[tuple[str, ...]], start: int, n: int) -> int | None:

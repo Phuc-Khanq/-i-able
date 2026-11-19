@@ -1038,6 +1038,10 @@ class ModeManager:
             self._status("info", "Learned: " + "; ".join(learned))
         try:
             self._word_store().touch(typed)                # words in use stay in Whisper's hint as the list grows
+            fixed_now = {" ".join(key(m)) for kind, h, m in taught if h}
+            weaker = [f for f in self._fix_store().kept(typed) if " ".join(key(f.meant)) not in fixed_now]
+            if weaker:                                     # a fix's "heard" words typed as they were: right this time
+                self._log("[learn] weaker: " + ", ".join(f'"{f.heard}" -> "{f.meant}"' for f in weaker))
         except OSError as exc:
             self._log(f"[learn] couldn't save: {exc}")
 

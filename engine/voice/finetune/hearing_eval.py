@@ -332,6 +332,55 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, thre
     return out
 
 
+def fix_simulation(rows_path: Path, text_key: str, log, mic: str = "wav_headMic") -> dict:
+    """Would learning from fixes (engine/voice/personal_fixes.py) pay off for a dysarthric speaker? Replays a set's
+    rows in recording order (one microphone, so no utterance counts twice): each clip first gets the fixes learned
+    so far (made MIN_TIMES or more), then the user is assumed to fix every word still wrong by voice, which teaches
+    or forgets fixes exactly as PersonalFixes does. Counts words wrong before and after, and the learned fixes that
+    were right and wrong."""
+    import tempfile
+
+    import jiwer
+
+    from engine.voice.personal_fixes import PersonalFixes
+
+    rows = [json.loads(line) for line in open(rows_path, encoding="utf-8")]
+    rows = sorted((r for r in rows if f"/{mic}/" in r["path"]), key=lambda r: r["path"])
+    tmp = tempfile.TemporaryDirectory()
+    fixes = PersonalFixes(Path(tmp.name) / "fixes.txt")
+    before = after = n_words = good = bad = 0
+    for r in rows:
+        ref = common.normalize(r["ref"]).split()
+        heard = common.normalize(r[text_key]).split()
+        if not ref:
+            continue
+        fixed_words, used = fixes.apply([{"text": w, "conf": 0.5} for w in heard])
+        fixed = [w["text"].lower() for w in fixed_words]
+        e0 = jiwer.process_words(" ".join(ref), " ".join(heard) or "<none>")
+        e1 = jiwer.process_words(" ".join(ref), " ".join(fixed) or "<none>")
+        before += e0.substitutions + e0.deletions + e0.insertions
+        after += e1.substitutions + e1.deletions + e1.insertions
+        n_words += len(ref)
+        refset = set(ref)
+        for f in used:
+            good += f.meant.lower() in refset
+            bad += f.meant.lower() not in refset
+        for chunk in e1.alignments[0]:                 # the user fixes what is still wrong, word by word
+            rs, re_, hs, he = chunk.ref_start_idx, chunk.ref_end_idx, chunk.hyp_start_idx, chunk.hyp_end_idx
+            if chunk.type == "substitute" and re_ - rs == he - hs:
+                for i, j in zip(range(rs, re_), range(hs, he)):
+                    if j < len(fixed):                 # an empty answer was scored as "<none>": nothing to fix
+                        fixes.record(fixed[j], ref[i])
+        fixes.kept(" ".join(ref))                      # typed as fixed: heard words left in it were right
+    tmp.cleanup()
+    out = {"clips": len(rows), "words": n_words, "wer_before": round(100.0 * before / n_words, 2),
+           "wer_after": round(100.0 * after / n_words, 2), "learned_fixes_used_right": good,
+           "learned_fixes_used_wrong": bad}
+    log(f"{len(rows)} clips ({mic}), {n_words} words: WER {out['wer_before']} -> {out['wer_after']} with learned "
+        f"fixes; learned fixes made {good} times rightly, {bad} times wrongly")
+    return out
+
+
 def cleanup_compare(rows_path: Path, text_key: str, log, groups=("dys_seen", "dys_unseen", "librispeech")) -> dict:
     """The hearings plan's last check: the trained clean-up model (llama-server, settings.rewrite_gguf) on each
     sentence's Whisper text, without and with Whisper's other readings as "Other hearings". Scores both against the
@@ -389,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cleanup", type=Path, default=None,
                    help="instead: run the trained clean-up on these rows, without and with the other hearings")
     p.add_argument("--text", default="greedy", help="--cleanup: which Whisper text to clean (greedy, b5)")
+    p.add_argument("--fix-sim", type=Path, default=None,
+                   help="instead: replay these rows as if the user fixed every wrong word (learning from fixes)")
     p.add_argument("--hot-test", action="store_true",
                    help="instead: the app's pass with and without a word list the speaker isn't saying")
     p.add_argument("--vad-test", action="store_true",
@@ -404,6 +455,10 @@ def main(argv: list[str] | None = None) -> int:
     log = common.Log()
     if a.cleanup:
         cleanup_compare(a.cleanup, a.text, log)
+        return 0
+    if a.fix_sim:
+        for mic in ("wav_headMic", "wav_arrayMic"):
+            fix_simulation(a.fix_sim, a.text, log, mic=mic)
         return 0
     split, source = SETS[a.set]
     clips = pick(common.read_manifest(common.manifest_path(Path(a.data_dir))), split, source, a.limit)

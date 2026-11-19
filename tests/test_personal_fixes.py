@@ -71,6 +71,20 @@ class TestPersonalFixes(Temp):
         self.assertTrue(self.fixes.forget("WAITER"))
         self.assertFalse(self.fixes.forget("waiter"))
 
+    def test_common_words_are_never_learned(self):
+        self.assertIsNone(self.fixes.record("that", "the"))          # made everywhere it would break sentences
+        self.assertIsNone(self.fixes.record("right", "write"))
+        self.assertIsNotNone(self.fixes.record("hat away", "Hathaway"))
+
+    def test_a_heard_word_typed_as_it_was_weakens_its_fix(self):
+        self.fixes.record("waiter", "water")
+        self.fixes.record("waiter", "water")
+        self.assertEqual([f.heard for f in self.fixes.kept("The waiter was kind.")], ["waiter"])
+        self.assertEqual(self.fixes.fixes()[0].times, 1)               # not automatic any more
+        self.fixes.kept("Thank the waiter.")
+        self.assertEqual(self.fixes.fixes(), [])
+        self.assertEqual(self.fixes.kept("no fixes here"), [])
+
     def test_a_broken_file_never_stops_dictation(self):
         self.fixes.path.parent.mkdir(parents=True)
         self.fixes.path.write_bytes(b"\xff\xfe\x00bad")
