@@ -154,6 +154,14 @@ VARIANTS = {
     "b5_t0_notok": {"beam_size": 5, "temperature": 0.0, "without_timestamps": True},
     "b5_notok": {"beam_size": 5, "without_timestamps": True},               # beam 5, fallback kept
     "b5_t0_notok_keep": {"beam_size": 5, "temperature": 0.0, "without_timestamps": True, "keep_short": True},
+    # without_timestamps inside transcribe() repeats text (TORGO dev sentences 26% -> 64%); these keep timestamps:
+    "t0_keep": {"temperature": 0.0, "keep_short": True},
+    "b5_t0": {"beam_size": 5, "temperature": 0.0},
+    "b5_t0_keep": {"beam_size": 5, "temperature": 0.0, "keep_short": True},
+    # the fallback only for repetition loops (compression ratio), not for "unsure" (log probability)
+    "nolp": {"log_prob_threshold": None},
+    "b5_nolp": {"beam_size": 5, "log_prob_threshold": None},
+    "b5_nolp_keep": {"beam_size": 5, "log_prob_threshold": None, "keep_short": True},
 }
 
 

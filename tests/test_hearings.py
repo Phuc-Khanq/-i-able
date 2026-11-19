@@ -71,6 +71,21 @@ class TestWorker(unittest.TestCase):
         self.assertEqual(dictation_module.MAX_HEARINGS, 2)
 
 
+class TestDecode(unittest.TestCase):
+    def test_no_random_redecoding_when_unsure(self):
+        seen = {}
+
+        class Recording(FakeWhisperModel):
+            def transcribe(self, audio, **kwargs):
+                seen.update(kwargs)
+                return super().transcribe(audio, **kwargs)
+
+        Dictation(model=Recording()).transcribe("hello there")
+        self.assertIsNone(seen["log_prob_threshold"])        # the loop check (compression ratio) stays on
+        self.assertNotIn("temperature", seen)
+        self.assertTrue(seen["word_timestamps"])
+
+
 class ConstMouth:
     def __init__(self, f):
         self.f = f

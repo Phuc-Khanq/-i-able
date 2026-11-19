@@ -30,7 +30,12 @@ from engine.core import topics
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 BEAM_SIZE = 1             # greedy: fastest; short utterances barely gain from beam search
-DECODE: dict = {}         # other faster-whisper options for the app's pass (none: faster-whisper's defaults)
+# Other faster-whisper options for the app's pass. log_prob_threshold None: when Whisper is unsure (a low average log
+# probability, which is most of the time for a voice it finds hard), keep its answer instead of decoding again at
+# random (the temperature fallback); the fallback still catches repetition loops (compression ratio). TORGO dev (M05,
+# 470 clips): 55.4% -> 51.5% of words wrong, sentences unchanged (26.0%), single words 121.6% -> 108.7%; LibriSpeech
+# dev unchanged (1.50%); slightly faster (hearing_eval.py --variants, 2026-11-19).
+DECODE: dict = {"log_prob_threshold": None}
 NO_SPEECH_SKIP = 0.6      # drop a segment Whisper thinks is silence
 HALLUCINATION_CONF = 0.35  # a 1-3 word result this unsure is usually noise ("Thank you.")
 MAX_QUEUED = 3            # if Whisper falls behind, drop the oldest utterance
