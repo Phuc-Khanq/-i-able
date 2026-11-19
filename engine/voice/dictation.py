@@ -291,9 +291,11 @@ class DictationWorker:
         self._partial_lock = threading.Lock()
         self._partial_gen = 0
         self._live_text = ""
-        # Whisper's other readings for the clean-up ("hearings"): only with the real Whisper (tests pass a model)
+        # Whisper's other readings for the clean-up ("hearings"): only with the real Whisper (tests pass a model), and
+        # only on the GPU (about 120 ms there; on a laptop's CPU a second beam-5 pass would take seconds)
         self.send_hearings = (bool(getattr(settings, "whisper_hearings", True))
-                              and getattr(dictation, "_model", None) is None)
+                              and getattr(dictation, "_model", None) is None
+                              and str(getattr(settings, "whisper_device", "cuda")).startswith("cuda"))
         # Short unsure results ("Up." at 0.2) go to a dictation card, marked unsure, when the mouth gate saw the user
         # say them (TORGO dev single words: twice as many right words; see docs/dictation_learning_from_wispr.md)
         self.show_unsure_short = (bool(getattr(settings, "show_unsure_short", True))

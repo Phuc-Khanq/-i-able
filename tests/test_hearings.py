@@ -67,6 +67,13 @@ class TestWorker(unittest.TestCase):
     def test_off_for_tests_that_pass_their_own_model(self):
         self.assertFalse(DictationWorker(FakeBus(), Dictation(model=FakeWhisperModel()), settings=None).send_hearings)
 
+    def test_gpu_only(self):
+        from types import SimpleNamespace
+        cpu = SimpleNamespace(whisper_device="cpu", whisper_hearings=True)
+        gpu = SimpleNamespace(whisper_device="cuda", whisper_hearings=True)
+        self.assertFalse(DictationWorker(FakeBus(), Dictation(cpu), settings=cpu).send_hearings)
+        self.assertTrue(DictationWorker(FakeBus(), Dictation(gpu), settings=gpu).send_hearings)
+
     def test_constants(self):
         self.assertEqual(dictation_module.MAX_HEARINGS, 2)
 
