@@ -309,7 +309,11 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, thre
                 ain.process(feed[i:i + 2048])
             cut = " ".join(words_to_text(d.transcribe(u)) for u in bus.utterances).strip()
             full = words_to_text(d.transcribe(audio))
-            rows.append({"group": c.group, "ref": c.text, "full": full, "cut": cut, "pieces": len(bus.utterances),
+            gap = np.zeros(int(0.3 * common.SAMPLE_RATE), np.float32)       # "re-hear": the pieces as one clip
+            joined = (words_to_text(d.transcribe(np.concatenate([x for u in bus.utterances for x in (u, gap)])))
+                      if len(bus.utterances) > 1 else cut)
+            rows.append({"group": c.group, "ref": c.text, "full": full, "cut": cut, "joined": joined,
+                         "pieces": len(bus.utterances),
                          "cut_s": round(sum(len(u) for u in bus.utterances) / common.SAMPLE_RATE, 2),
                          "clip_s": round(len(audio) / common.SAMPLE_RATE, 2)})
     out = {}
@@ -317,12 +321,13 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, thre
         sel = [r for r in rows if g == "all" or r["group"] == g]
         a = common.wer_table([(r["ref"], r["full"]) for r in sel])
         b = common.wer_table([(r["ref"], r["cut"]) for r in sel])
+        j = common.wer_table([(r["ref"], r["joined"]) for r in sel])
         missed = sum(1 for r in sel if r["pieces"] == 0)
         split = sum(1 for r in sel if r["pieces"] > 1)
-        out[g] = {"clips": len(sel), "wer_whole_clip": a["wer"], "wer_after_audio_in": b["wer"], "missed": missed,
-                  "split": split}
-        log(f"{g}: {len(sel)} clips, WER on the whole clip {a['wer']}, on what audio_in cut {b['wer']}; "
-            f"no utterance at all {missed}, cut in pieces {split}")
+        out[g] = {"clips": len(sel), "wer_whole_clip": a["wer"], "wer_after_audio_in": b["wer"],
+                  "wer_pieces_reheard": j["wer"], "missed": missed, "split": split}
+        log(f"{g}: {len(sel)} clips, WER on the whole clip {a['wer']}, on what audio_in cut {b['wer']}, "
+            f"pieces heard again as one {j['wer']}; no utterance at all {missed}, cut in pieces {split}")
     _ain.MIN_SPEECH_S = old_min
     dest = (common.REPO_ROOT / "checkpoints" / "hearings"
             / f"vad_rows_{settings.pause_seconds}_{thr}_{min_speech if min_speech is not None else old_min}.jsonl")
