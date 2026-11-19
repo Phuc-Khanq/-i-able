@@ -30,9 +30,15 @@ from engine.core import topics
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 BEAM_SIZE = 1             # greedy: fastest; short utterances barely gain from beam search
+DECODE: dict = {}         # other faster-whisper options for the app's pass (none: faster-whisper's defaults)
 NO_SPEECH_SKIP = 0.6      # drop a segment Whisper thinks is silence
 HALLUCINATION_CONF = 0.35  # a 1-3 word result this unsure is usually noise ("Thank you.")
 MAX_QUEUED = 3            # if Whisper falls behind, drop the oldest utterance
+HEARINGS_N = 3            # Whisper's other readings for the clean-up (docs/cleanup_hearings_plan.md): best + 2
+HEARINGS_BEAM = 5
+HEARINGS_BELOW = 0.5      # ...only when a word is under this: on TORGO dev (M05) that ran on 70% of clips and caught
+                          # 88% of those a reading improves (hearing_eval.py, 2026-11-19)
+MAX_HEARINGS = 2
 
 
 def resolve_model(name: str) -> str:
@@ -113,26 +119,39 @@ class Dictation:
         self.load()
         self.transcribe(np.zeros(16000, dtype=np.float32))
 
-    def transcribe(self, audio) -> list[dict]:
+    def transcribe(self, audio, prompt: str | None = None, keep_unsure: bool = False,
+                   beam_size: int | None = None, keep_short: bool = False, **decode) -> list[dict]:
         """Return [{"text": str, "conf": float, "start": s, "end": s}, ...].
 
         start / end are seconds from the start of `audio` (Whisper's word timestamps). The
         DictationWorker uses them to line words up with the camera, then drops them: the
         transcript and the preview bubble only get "text" and "conf".
+
+        `prompt`: text the user wrote just before this (Whisper's initial_prompt), so it continues it.
+        `keep_unsure`: keep what the noise filters drop (a segment Whisper thinks is silence, a short unsure result).
+        `keep_short`: keep only a short unsure result (the caller decides, see DictationWorker.show_unsure_short).
+        `decode`: other faster-whisper options for measurements (temperature, without_timestamps); the app uses
+        DECODE.
         """
         self.load()
+        extra = {"initial_prompt": prompt} if prompt and prompt.strip() else {}
+        extra.update(DECODE)
+        extra.update(decode)
         segments, _info = self._model.transcribe(
             audio,
             language="en",
-            beam_size=BEAM_SIZE,
+            beam_size=beam_size or BEAM_SIZE,
             word_timestamps=True,
             vad_filter=False,                # audio_in already cut the utterance with Silero VAD
             condition_on_previous_text=False,
             hotwords=self.current_hotwords(),
+            **extra,
         )
         words: list[dict] = []
+        self.last_no_speech = 0.0
         for seg in segments:                 # segments is lazy: this loop runs the model
-            if getattr(seg, "no_speech_prob", 0.0) > NO_SPEECH_SKIP:
+            self.last_no_speech = max(self.last_no_speech, float(getattr(seg, "no_speech_prob", 0.0) or 0.0))
+            if getattr(seg, "no_speech_prob", 0.0) > NO_SPEECH_SKIP and not keep_unsure:
                 continue
             for w in seg.words or []:
                 text = w.word.strip()
@@ -141,9 +160,59 @@ class Dictation:
                     end = max(start, float(getattr(w, "end", None) or 0.0))
                     words.append({"text": text, "conf": round(float(w.probability), 3),
                                   "start": round(start, 3), "end": round(end, 3)})
-        if words and len(words) <= 3 and max(w["conf"] for w in words) < HALLUCINATION_CONF:
+        if short_unsure(words) and not (keep_unsure or keep_short):
             return []
         return words
+
+    def hearings(self, audio, n: int = HEARINGS_N, beam_size: int = HEARINGS_BEAM,
+                 prompt: str | None = None) -> list[tuple[str, float]]:
+        """Whisper's top `n` readings of one utterance, best first: [(text, score)].
+
+        A beam search without timestamps, with the same hotwords (and prompt) as transcribe(). faster-whisper's
+        transcribe() only returns its best reading, so this calls its parts directly: features, encoder, prompt,
+        then CTranslate2's generate with num_hypotheses. Utterances over 30 s get [] (Whisper hears 30 s at once).
+        score is the hypothesis's length-normalized log probability (higher is surer).
+        """
+        import numpy as np
+
+        self.load()
+        m = self._model
+        audio = np.asarray(audio, dtype=np.float32)
+        if len(audio) > 30 * 16000 or not len(audio):
+            return []
+        tok_mod = importlib.import_module("faster_whisper.tokenizer")
+        fw = importlib.import_module("faster_whisper.transcribe")
+        features = m.feature_extractor(audio)
+        frames = m.feature_extractor.nb_max_frames
+        features = features[:, :frames]
+        if features.shape[-1] < frames:
+            features = np.pad(features, ((0, 0), (0, frames - features.shape[-1])))
+        encoded = m.encode(features)
+        tokenizer = tok_mod.Tokenizer(m.hf_tokenizer, m.model.is_multilingual, task="transcribe", language="en")
+        previous = tokenizer.encode(" " + prompt.strip()) if prompt and prompt.strip() else []
+        start = m.get_prompt(tokenizer, previous, without_timestamps=True, hotwords=self.current_hotwords())
+        result = m.model.generate(encoded, [start], beam_size=max(beam_size, n), num_hypotheses=n,
+                                  return_scores=True, max_length=m.max_length, suppress_blank=True,
+                                  suppress_tokens=fw.get_suppressed_tokens(tokenizer, [-1]))[0]
+        out = []
+        for ids, score in zip(result.sequences_ids, result.scores):
+            text = tokenizer.decode([t for t in ids if t < tokenizer.eot]).strip()
+            if text:
+                out.append((text, round(float(score), 4)))
+        return out
+
+
+def short_unsure(words: list[dict]) -> bool:
+    """1 to 3 words, none of them surer than HALLUCINATION_CONF: usually noise ("Thank you."), but for a voice
+    Whisper finds hard it is often the right word (TORGO dev single words: about half the right ones look like this)."""
+    return bool(words) and len(words) <= 3 and max(w["conf"] for w in words) < HALLUCINATION_CONF
+
+
+def _same(text: str) -> str:
+    """Text for "says the same": lowercase words without punctuation."""
+    import re
+
+    return " ".join(re.sub(r"[^\w\s']", " ", str(text).lower()).split())
 
 
 def words_to_text(words: list[dict]) -> str:
@@ -213,6 +282,14 @@ class DictationWorker:
         self._partial_lock = threading.Lock()
         self._partial_gen = 0
         self._live_text = ""
+        # Whisper's other readings for the clean-up ("hearings"): only with the real Whisper (tests pass a model)
+        self.send_hearings = (bool(getattr(settings, "whisper_hearings", True))
+                              and getattr(dictation, "_model", None) is None)
+        # Short unsure results ("Up." at 0.2) go to a dictation card, marked unsure, when the mouth gate saw the user
+        # say them (TORGO dev single words: twice as many right words; see docs/dictation_learning_from_wispr.md)
+        self.show_unsure_short = (bool(getattr(settings, "show_unsure_short", True))
+                                  and getattr(dictation, "_model", None) is None)
+        self._hearings_failed = False
         bus.subscribe(topics.TO_UI, self.on_ui)
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -343,14 +420,20 @@ class DictationWorker:
 
     def _process(self, audio, span: dict | None = None) -> None:
         t0 = time.perf_counter()
+        # A short unsure result is noise for most voices but often the right word for ours: keep it when the camera
+        # can say whether the user's mouth moved (the mouth gate below), else drop it as before
+        keep_short = self.show_unsure_short and self.mouth is not None and self.gate and span is not None
         try:
-            words = self.dictation.transcribe(audio)
+            words = (self.dictation.transcribe(audio, keep_short=True) if keep_short
+                     else self.dictation.transcribe(audio))
         except Exception as exc:               # one bad clip must not kill the demo
             self._error(f"Transcription failed: {exc}")
             return
+        unsure = keep_short and short_unsure(words)
         ms = round((time.perf_counter() - t0) * 1000, 1)
         if self.live:                          # timing for tuning: where a slow dictation spends its time
             self._log(f"[whisper] {_seconds(audio):.1f} s of audio, {len(words)} words in {ms:.0f} ms")
+        heard = len(words)
         if (words and span is not None and self.mouth is not None and self.gate
                 and not self._resume_while_paused(words)):
             words = self._mouth_gate(words, span)
@@ -359,11 +442,40 @@ class DictationWorker:
                 return
         if not words:
             return
-        self.bus.publish(topics.TRANSCRIPT, {
-            "text": words_to_text(words),
-            "words": public_words(words),
-            "ms": ms,
-        })
+        payload = {"text": words_to_text(words), "words": public_words(words), "ms": ms}
+        if unsure:
+            if len(words) < heard:
+                return                         # part of it wasn't the user's mouth: drop it as before
+            payload["unsure"] = True           # the mode manager only puts it on a dictation card, never a command
+            self._log(f"[whisper] unsure, kept because your mouth moved: {payload['text']}")
+        hearings = self._hearings(audio, words) if len(words) == heard else []   # gated words: they don't line up
+        if hearings:
+            payload["hearings"] = hearings
+        self.bus.publish(topics.TRANSCRIPT, payload)
+
+    def _hearings(self, audio, words: list[dict]) -> list[str]:
+        """Whisper's other readings of this utterance for the clean-up model (docs/cleanup_hearings_plan.md): a beam
+        search's top 3, run only when a word is under HEARINGS_BELOW, without the ones that say the same as the
+        best. None for clips over 30 s, or if the extra pass fails (dictation goes on without them)."""
+        if not self.send_hearings or min(w["conf"] for w in words) >= HEARINGS_BELOW or _seconds(audio) > 30:
+            return []
+        t0 = time.perf_counter()
+        try:
+            readings = self.dictation.hearings(audio)
+        except Exception as exc:
+            if not self._hearings_failed:
+                self._hearings_failed = True
+                self._log(f"[whisper] other hearings skipped: {exc}")
+            return []
+        seen = {_same(words_to_text(words))}
+        out = []
+        for text, _score in readings:
+            if _same(text) and _same(text) not in seen:
+                seen.add(_same(text))
+                out.append(text)
+        if self.live:
+            self._log(f"[whisper] {len(out)} other hearings in {1000 * (time.perf_counter() - t0):.0f} ms")
+        return out[:MAX_HEARINGS]
 
     # ----------------------------------------------------------- mouth gate
     def on_ui(self, msg: dict) -> None:

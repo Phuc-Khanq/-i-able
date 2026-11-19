@@ -223,6 +223,11 @@ class ModeManager:
         self._taught: list[tuple[str, str, str]] = []
         self.learning = False                    # main.py turns it on with the real Whisper; tests use temporary files
         self.snippets = None                     # the user's snippets (engine/voice/snippets.py), made on first use
+        # Whisper's other hearings (docs/cleanup_hearings_plan.md, step 2): for each utterance that went onto the card
+        # whole, (start, end, its other readings); the newest transcript's waits in _heard_new until all its words
+        # are on the card. Any other change to the card forgets them.
+        self._heard: list[tuple[int, int, list[str]]] = []
+        self._heard_new: tuple[int, int, list[str]] | None = None
         self._lock = threading.RLock()
         self._stop = threading.Event()
 
@@ -341,6 +346,12 @@ class ModeManager:
         with self._lock:
             self.tick()
             words = transcript.get("words") or [{"text": w, "conf": 1.0} for w in transcript["text"].split()]
+            if transcript.get("unsure"):
+                # A short result Whisper was unsure of, kept because the camera saw the user say it: it may go on a
+                # dictation card (marked unsure there), but it never runs a command or answers a question
+                if self.mode == Mode.DICTATION and not (self.question or self.search):
+                    self._add_to_preview(words)
+                return
             clauses = commands.split_clauses(words)
             heard = commands.answer(transcript["text"])
             if heard and (self.question or self.preview or self.search) and self.mode != Mode.PAUSED:
@@ -388,6 +399,8 @@ class ModeManager:
                         return
                     self._do(whole)
                     return
+            heard = [str(h) for h in transcript.get("hearings") or [] if str(h).strip()]
+            self._heard_new = (len(self.preview), len(words), heard) if heard and self.mode == Mode.DICTATION else None
             done, last, i = False, None, 0
             while i < len(clauses):
                 c = clauses[i]
@@ -847,6 +860,7 @@ class ModeManager:
         self._remember()
         self.preview = [dict(w) for w in words]
         self._final = True
+        self._heard, self._heard_new = [], None            # fixed by hand: Whisper's other hearings no longer fit
         self._preview_changed(clean_up=False)
         if label:
             self._ui(messages.COMMAND, label=label)
@@ -859,6 +873,7 @@ class ModeManager:
             return
         words, final = self._history.pop()
         self.preview, self._final = words, final
+        self._heard, self._heard_new = [], None
         self._preview_changed(clean_up=not final)   # a passage that was never fixed gets its clean-up again
 
     def _voice_edit(self, text: str) -> bool:
@@ -1134,6 +1149,7 @@ class ModeManager:
             self._use_clean = True                         # "use original" lasts for one preview
             self._history, self._final = [], False         # typed or dropped: nothing to take back
             self._taught = []                              # a dropped card teaches nothing
+            self._heard, self._heard_new = [], None
         elif self._cleaning() and clean_up:
             self._rw_running = True
             self.bus.publish(topics.REWRITE_REQUEST,
@@ -1162,7 +1178,27 @@ class ModeManager:
             hints["app"] = self.app_name() or ""
         except Exception:                                  # a broken lookup never stops dictation
             hints["app"] = ""
+        hints["hearings"] = self._hearing_versions()
         return {k: v for k, v in hints.items() if v}
+
+    def _hearing_versions(self) -> list[str]:
+        """Whisper's other hearings of the card, as whole versions of the card's text (the shape the clean-up model
+        was trained on): the card with one utterance swapped for one of its other readings, newest first, at most 2.
+        An utterance counts once all its words are on the card (none were taken out as commands or changed)."""
+        new = self._heard_new
+        if new is not None and new[0] + new[1] == len(self.preview):
+            self._heard = [h for h in self._heard if h[1] <= new[0]] + [(new[0], len(self.preview), new[2])]
+            self._heard_new = None
+        words = [w["text"] for w in self.preview]
+        out: list[str] = []
+        for start, end, hearings in reversed(self._heard):
+            if end > len(words):
+                continue
+            for h in hearings:
+                out.append(" ".join(words[:start] + [h] + words[end:]))
+                if len(out) == 2:
+                    return out
+        return out
 
     def _show_preview(self) -> None:
         if not self._cleaning():

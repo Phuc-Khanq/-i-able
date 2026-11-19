@@ -29,7 +29,9 @@ PARTIAL_AUDIO = "voice.partial_audio"  # {"audio": float32 array, "start_ms", "e
                                     # speaking (live preview only; the final UTTERANCE follows)
 TRANSCRIPT = "voice.transcript"     # {"text": str, "words": [{"text", "conf"}], "ms": float}. Optional: "hearings"
                                     # (list of str, at most 2): Whisper's other versions of the whole utterance, only
-                                    # when it was unsure of a word; never just a change of punctuation or capitals
+                                    # when it was unsure of a word; never just a change of punctuation or capitals.
+                                    # Optional "unsure": True, a short result Whisper was unsure of that the mouth
+                                    # gate saw the user say: dictation card only, never a command
 DELETE_VOICE_DATA = "voice.delete_data"  # {} (mode manager -> voice_data, after a confirm)
 
 # Dictation clean-up (mode manager <-> engine/voice/rewrite.py RewriteWorker)
