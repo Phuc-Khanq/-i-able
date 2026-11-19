@@ -93,7 +93,7 @@ Last updated: 2026-11-12 15:05 (both chats wrapped up. Clean-up: unsure flag, he
 - Cheap training tests: more LoRA dropout; a heavier loss weight on the words that change.
 - Let the trainer resume after a restart (save the optimizer state with each check).
 - Show the raw transcript in the preview while the clean-up runs.
-- From Wispr Flow (Dictation chat, 2026-11-19): names on screen as Whisper hotwords (UI Automation, in memory only; measure the cost of a word list first); per-app style (no final period in chat apps); a lowercase first word when dictating mid-sentence; rank the word list by use, so the most used words always fit Whisper's prompt.
+- From Wispr Flow (Dictation chat, 2026-11-19): per-app style (no final period in chat apps); a lowercase first word when dictating mid-sentence; rank the word list by use, so the most used words always fit Whisper's prompt. (Names on screen as hotwords: measured, it hurts dysarthric speech badly: TORGO dev sentences 26.0% -> 41.8%. Not doing it.)
 - An "Exact" clean-up level that skips the model completely.
 
 ## Earlier

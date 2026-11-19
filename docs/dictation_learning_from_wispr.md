@@ -173,8 +173,13 @@ Whisper's other hearings and says "Check this" on 43% of its wrong answers inste
 - Re-hear the whole passage: when a sentence came in pieces, transcribe the pieces' audio again as one clip after the
   user goes quiet (in memory only). Measured gain on cut sentences: 32.7% -> 26.0%. The 2.5 s pause gets most of it
   more simply.
-- Names on screen as Whisper hotwords (Wispr's context awareness): now that the word list is shown safe, this is
-  worth trying; read the focused window with UI Automation, in memory only.
+- Names on screen as Whisper hotwords (Wispr's context awareness): **measured, not worth it with stock Whisper.**
+  Proxy: each clip got the rare words (4+ letters, more than one Whisper token, up to 40) of the other clips of its
+  chapter or session as hotwords, like names read off the screen (`hearing_eval.py --context-test`). LibriSpeech dev:
+  WER 1.50% -> 1.60%; the clip's own listed words came out right 190 times instead of 188 (of 195). TORGO dev:
+  sentences 26.0% -> 41.8%, single words 108.7% -> 121.6%: Whisper puts listed words that sound a bit alike into
+  unclear speech. So a long list of ordinary words is harmful for our users; the word list must stay short and hold
+  names and terms (which is what auto-add keeps to).
 - For the clean-up chat: Wispr's "Backtrack" ("at 2 actually 3" -> "at 3") and per-app style in its training data;
   the LibriSpeech over-editing above.
 - Real dysarthric recordings (the Speech Accessibility Project proposal) stay the biggest lever: every number here is
