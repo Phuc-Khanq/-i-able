@@ -156,7 +156,8 @@ DECISIONS (not decided): a 2.5 s pause for users who pause mid-sentence.
 
 The missed short words are this one speaker's quiet voice: Silero's threshold 0.35 recovered 5 of them and 0.25
 recovered 13 (43 -> 30 never heard; the words-wrong rate on what was cut then matches the whole clip), while the held-out
-speakers lost only 2 words at any threshold. The shortest-utterance limit isn't the cause (0.1 s: still 43). A lower
+speakers lost only 2 words at any threshold. The shortest-utterance limit isn't the cause (0.1 s: still 43), nor is
+the auto gain's ceiling (32x instead of 8x: still 43). A lower
 threshold may let in coughs and room noise and keep utterances from ending in a noisy room, which can't be measured
 offline, so the default stays 0.5 and a new setting, `vad_threshold`, lets a quiet speaker try 0.3 with the camera on
 (commit 68f8adc).
