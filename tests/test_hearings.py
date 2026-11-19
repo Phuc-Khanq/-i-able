@@ -94,6 +94,25 @@ class ConstMouth:
         return self.f
 
 
+class TestOptionsWithoutCleanUp(unittest.TestCase):
+    def test_option_two_takes_whispers_other_hearing(self):
+        bus = FakeBus()
+        mm = ModeManager(bus, log=lambda *_: None)                     # no rewrite_wait_s: the clean-up is off
+        mm.on_transcript({"text": "start dictation", "words": [{"text": "start", "conf": 1.0},
+                                                              {"text": "dictation", "conf": 1.0}]})
+        mm.on_transcript({"text": "meet at the bank", "hearings": ["meet at the bench", "Meet at the bank."],
+                          "words": [{"text": t, "conf": 0.4} for t in "meet at the bank".split()]})
+        self.assertEqual(bus.ui("dictation_preview")[-1]["alternatives"], ["meet at the bench"])   # no same-says
+        mm.on_transcript({"text": "option two", "words": [{"text": "option", "conf": 1.0},
+                                                         {"text": "two", "conf": 1.0}]})
+        card = bus.ui("dictation_preview")[-1]
+        self.assertEqual(" ".join(w["text"] for w in card["words"]), "meet at the bench")
+        self.assertNotIn("alternatives", card)                          # picked: the card is fixed now
+        mm.on_transcript({"text": "option three", "words": [{"text": "option", "conf": 1.0},
+                                                           {"text": "three", "conf": 1.0}]})
+        self.assertTrue(any("no option three" in m["text"] for m in bus.ui("status")))
+
+
 class TestUnsureShort(unittest.TestCase):
     """ "up?" comes back at 0.3 (FakeWhisperModel), under the noise filter's 0.35."""
 
@@ -160,6 +179,18 @@ class TestModeManager(unittest.TestCase):
     def test_none_without_hearings(self):
         self.say("meet at the bank")
         self.assertNotIn("hearings", self.request())
+
+    def test_the_card_offers_them_when_the_clean_up_has_no_other_readings(self):
+        self.say("meet at the bank", ["meet at the bench"])
+        req = self.request()
+        self.bus.publish(topics.REWRITE_RESULT, {"id": req["id"], "clean": "Meet at the bank.", "used": True,
+                                                 "ms": 300.0})
+        card = self.bus.ui("dictation_preview")[-1]
+        self.assertEqual(card["alternatives"], ["meet at the bench"])
+        self.mm.on_transcript({"text": "option two", "words": [{"text": "option", "conf": 1.0},
+                                                               {"text": "two", "conf": 1.0}]})
+        self.assertEqual(" ".join(w["text"] for w in self.bus.ui("dictation_preview")[-1]["words"]),
+                         "meet at the bench")
 
     def test_a_fix_forgets_them(self):
         self.say("meet at the bank", ["meet at the bench"])

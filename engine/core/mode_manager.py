@@ -705,9 +705,13 @@ class ModeManager:
                 self._show_preview()
         elif name in ("option_1", "option_2", "option_3"):
             n = int(name[-1])
-            readings = self._reading_texts() if self.preview and self._cleaning() else []
+            readings = self._reading_texts() if self.preview else []
             if n > len(readings):
                 self._status("info", f"There's no option {('one', 'two', 'three')[n - 1]} for this text")
+                return
+            if not self._cleaning():
+                if n > 1:                                  # the clean-up is off: the card becomes that hearing
+                    self._edit_preview(self._clean_words(readings[n - 1]), f"Option {n}")
                 return
             self._choice, self._use_clean = n, True
             self._rf_due = None                            # a reading was picked: a later refine doesn't replace it
@@ -1125,12 +1129,29 @@ class ModeManager:
         return self.preview
 
     def _reading_texts(self) -> list[str]:
-        """The readings the card numbers: 1 the model's text, then its other readings (the trained model only)."""
-        best = self._best_clean()
-        if best is None:
-            return []
-        alts, _ = self._readings.get("refined" if self._refined is not None else "clean", ([], False))
-        return [" ".join(w["text"] for w in best), *alts]
+        """The readings the card numbers: 1 the text shown, then the clean-up's other readings (the trained model
+        only) or, when it gave none, Whisper's other hearings of the card (whole versions of it, at most 2). With
+        the clean-up off, 1 is the card as heard."""
+        if self._cleaning():
+            best = self._best_clean()
+            if best is None:
+                return []
+            first = " ".join(w["text"] for w in best)
+            alts, _ = self._readings.get("refined" if self._refined is not None else "clean", ([], False))
+        else:
+            if not self.preview:
+                return []
+            first, alts = " ".join(w["text"] for w in self.preview), []
+        if not alts:
+            def says(text: str) -> str:
+                return " ".join(re.sub(r"[^\w\s']", " ", text.lower()).split())
+
+            seen, alts = {says(first)}, []
+            for v in self._hearing_versions():
+                if says(v) not in seen:
+                    seen.add(says(v))
+                    alts.append(v)
+        return [first, *alts]
 
     def _preview_changed(self, clean_up: bool = True) -> None:
         """self.preview just changed: the old clean text and any waiting insert no longer apply.
@@ -1202,7 +1223,9 @@ class ModeManager:
 
     def _show_preview(self) -> None:
         if not self._cleaning():
-            self._ui(messages.DICTATION_PREVIEW, words=list(self.preview))   # exactly as before
+            others = self._reading_texts()[1:] if self.preview else []    # Whisper's other hearings, if any
+            extra = {"alternatives": others} if others else {}
+            self._ui(messages.DICTATION_PREVIEW, words=list(self.preview), **extra)
         elif self._best_clean() is not None and self._use_clean:
             _, unsure = self._readings.get("refined" if self._refined is not None else "clean", ([], False))
             readings = self._reading_texts()
