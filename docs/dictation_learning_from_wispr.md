@@ -98,10 +98,12 @@ TORGO dev's 115 sentences, without and with Whisper's other readings as "Other h
 So the hearings help a little with today's pass and mostly make the card's "Check this" honest: it now shows on 43%
 of the clean-up's wrong answers instead of 28% (with 8 right answers marked instead of 2).
 
-**For the clean-up chat:** on clear LibriSpeech book sentences (298) the clean-up takes WER from 1.50% to 3.28%: it
-changes 63 sentences (21%) and fixes 7. Many changes are its job (fillers like "You know", "Huh", repeated "enough,
-enough"), but some change meaning or wording: "pravity" -> "depravity", "signalizes" -> "signals", "persisted like his
-predecessor" -> "persisted in his predecessor Chrysostom's". Rows: `checkpoints/hearings/libri-dev.cleanup-greedy.jsonl`.
+**For the clean-up chat:** on clear LibriSpeech book sentences (298) the clean-up takes WER from 1.50% to 3.28%. It
+changes the words of 76 sentences (25%) and makes 7 better. Only 8 of the 76 are its job (fillers like "You know",
+"Huh", a repeated "enough, enough"); the rest add small words ("the" 8 times, "is" 4), drop them ("and" 8 times) or
+change words in 37 sentences ("wants" -> "want", "pravity" -> "depravity", "signalizes" -> "signals", "persisted like
+his predecessor" -> "persisted in his predecessor Chrysostom's"). Book prose isn't dictation, but it is the same
+over-editing as the 2026-11-05 "drop_small_words" finding. Rows: `checkpoints/hearings/libri-dev.cleanup-greedy.jsonl`.
 
 **6. Short unsure words kept when the mouth moved (built: commit 8a29693).** The app's noise filter dropped every
 1-to-3-word result under 0.35 confidence. On TORGO dev's 355 single words it left 165 results empty; without it 99
