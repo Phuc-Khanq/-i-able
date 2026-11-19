@@ -161,6 +161,17 @@ class TestUnsureShort(unittest.TestCase):
         self.assertTrue(self.bus.of(topics.TRANSCRIPT)[-1]["unsure"])
         self.assertEqual(self.bus.of(topics.OS_CLICK), [])
 
+    def test_an_unsure_yes_or_command_never_lands_on_the_card(self):
+        w = self.make(ConstMouth(1.0))
+        w.process("start dictation", {"start_ms": 0, "end_ms": 800})
+        w.process("see you at noon", {"start_ms": 1000, "end_ms": 2600})
+        for said in ("yes?", "stop?", "stop? dictation?"):
+            w.process(said, {"start_ms": 3000, "end_ms": 3800})
+            card = " ".join(x["text"] for x in self.bus.ui("dictation_preview")[-1]["words"])
+            self.assertEqual(card, "see you at noon", said)
+        self.assertEqual(self.bus.of(topics.OS_TYPE), [])                      # and nothing was typed
+        self.assertTrue(any("Please say it again" in m["text"] for m in self.bus.ui("status")))
+
     def test_dropped_when_the_mouth_didnt_move(self):
         w = self.make(ConstMouth(0.0))
         w.process("start dictation", {"start_ms": 0, "end_ms": 800})

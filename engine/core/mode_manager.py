@@ -353,8 +353,13 @@ class ModeManager:
                 else None
             if transcript.get("unsure"):
                 # A short result Whisper was unsure of, kept because the camera saw the user say it: it may go on a
-                # dictation card (marked unsure there), but it never runs a command or answers a question
-                if self.mode == Mode.DICTATION and not (self.question or self.search):
+                # dictation card (marked unsure there), but it never runs a command or answers a question. One that
+                # looks like a command or an answer ("yes", "stop") isn't put on the card either: typed as text it
+                # would be wrong whichever it was, so the user is asked to say it again.
+                if self._command_like(transcript["text"]):
+                    if self.mode != Mode.PAUSED:
+                        self._status("info", f'Not sure I heard "{transcript["text"].strip()}". Please say it again.')
+                elif self.mode == Mode.DICTATION and not (self.question or self.search):
                     self._add_to_preview(words)
                 return
             clauses = commands.split_clauses(words)
@@ -923,6 +928,15 @@ class ModeManager:
         self._taught.append(("spell", "", word))
         self._edit_preview(commands.add_word(self._shown_words(), word), "Spelled")
         return True
+
+    @staticmethod
+    def _command_like(text: str) -> bool:
+        """Would this utterance be read as a command or a yes / no answer (in any mode)?"""
+        body, _ = launch.strip_trigger(text)
+        if commands.answer(body) or commands.normalize(body) in commands.DICTATION_EXIT:
+            return True
+        cmd = commands.parse(body, allow_targets=False)
+        return cmd is not None and cmd.name != "type_text"
 
     def _snippet(self, text: str) -> bool:
         """Snippets (engine/voice/snippets.py; Wispr Flow's idea): "save this as my address" saves the card's text;
