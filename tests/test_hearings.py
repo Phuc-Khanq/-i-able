@@ -86,6 +86,21 @@ class TestDecode(unittest.TestCase):
         self.assertTrue(seen["word_timestamps"])
 
 
+class TestVadThreshold(unittest.TestCase):
+    def test_the_setting_reaches_silero(self):
+        from engine.config import settings
+        from engine.voice import audio_in
+
+        self.assertEqual(audio_in.load_vad(1.0).threshold, settings.vad_threshold)
+        self.assertEqual(audio_in.load_vad(1.0, threshold=0.3).threshold, 0.3)
+
+    def test_the_default_is_unchanged(self):
+        from engine.config import Settings
+        from engine.voice import audio_in
+
+        self.assertEqual(Settings().vad_threshold, audio_in.VAD_THRESHOLD)    # 0.5 unless config.local.json says
+
+
 class ConstMouth:
     def __init__(self, f):
         self.f = f

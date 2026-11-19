@@ -253,11 +253,13 @@ def context_test(clips, data_dir: Path, model, log, max_words: int = 40) -> dict
     return out
 
 
-def vad_test(clips, data_dir: Path, model, log, pause: float | None = None) -> dict:
+def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, threshold: float | None = None,
+             min_speech: float | None = None) -> dict:
     """Does the app's front door (audio_in.py: auto gain, Silero VAD, pre-roll, pads) lose speech before Whisper?
     Each clip goes through AudioIn as if from the mic (clips of one session in a row, so the gain adapts), with
     silence after it to end the utterance. Compares the app's pass on what AudioIn cut against the whole clip.
-    `pause`: the user's pause setting in seconds (default: settings.pause_seconds)."""
+    `pause`: the user's pause setting in seconds (default: settings.pause_seconds); `threshold`: Silero's speech
+    threshold (default audio_in.VAD_THRESHOLD); `min_speech`: the shortest utterance kept (audio_in.MIN_SPEECH_S)."""
     import copy
     import itertools
 
@@ -268,7 +270,13 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None) -> d
     settings = copy.copy(base)
     if pause:
         settings.pause_seconds = pause
-    log(f"pause_seconds {settings.pause_seconds}")
+    from engine.voice import audio_in as _ain
+
+    old_min = _ain.MIN_SPEECH_S
+    if min_speech is not None:
+        _ain.MIN_SPEECH_S = min_speech
+    thr = threshold or _ain.VAD_THRESHOLD
+    log(f"pause_seconds {settings.pause_seconds}, VAD threshold {thr}, shortest utterance {_ain.MIN_SPEECH_S} s")
     from engine.core import topics
     from engine.voice import audio_in
     from engine.voice.dictation import Dictation, words_to_text
@@ -289,7 +297,10 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None) -> d
     rows = []
     for _, session in itertools.groupby(clips, context_key):
         bus = Bus()
-        ain = audio_in.AudioIn(bus, settings, vad=audio_in.load_vad(float(settings.pause_seconds)))
+        vad = audio_in.VadIterator(audio_in.SileroOnnx(), threshold=thr,
+                                   min_silence_duration_ms=int(float(settings.pause_seconds) * 1000),
+                                   speech_pad_ms=audio_in.SPEECH_PAD_MS)
+        ain = audio_in.AudioIn(bus, settings, vad=vad)
         for c in session:
             audio = common.load_audio(c.audio_path(data_dir))
             bus.utterances.clear()
@@ -312,7 +323,9 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None) -> d
                   "split": split}
         log(f"{g}: {len(sel)} clips, WER on the whole clip {a['wer']}, on what audio_in cut {b['wer']}; "
             f"no utterance at all {missed}, cut in pieces {split}")
-    dest = common.REPO_ROOT / "checkpoints" / "hearings" / f"vad_rows_{settings.pause_seconds}.jsonl"
+    _ain.MIN_SPEECH_S = old_min
+    dest = (common.REPO_ROOT / "checkpoints" / "hearings"
+            / f"vad_rows_{settings.pause_seconds}_{thr}_{min_speech if min_speech is not None else old_min}.jsonl")
     with open(dest, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -381,6 +394,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--vad-test", action="store_true",
                    help="instead: the app's pass on what audio_in.py cuts from each clip, against the whole clip")
     p.add_argument("--pause", type=float, default=None, help="--vad-test: the pause setting to try, in seconds")
+    p.add_argument("--vad-threshold", type=float, default=None, help="--vad-test: Silero's speech threshold")
+    p.add_argument("--min-speech", type=float, default=None, help="--vad-test: the shortest utterance kept, s")
     p.add_argument("--context-test", action="store_true",
                    help="instead: rare words of the same chapter or session as hotwords (names on screen)")
     p.add_argument("--variants", default=None, const=",".join(VARIANTS), nargs="?",
@@ -411,7 +426,9 @@ def main(argv: list[str] | None = None) -> int:
         elif a.hot_test:
             test, name = hotwords_test, "hotwords"
         else:
-            test, name = (lambda *args: vad_test(*args, pause=a.pause)), f"vad{a.pause or ''}"
+            test = lambda *args: vad_test(*args, pause=a.pause, threshold=a.vad_threshold,  # noqa: E731
+                                          min_speech=a.min_speech)
+            name = f"vad{a.pause or ''}_{a.vad_threshold or ''}_{a.min_speech if a.min_speech is not None else ''}"
         summary = test(clips, Path(a.data_dir), model, log)
         common.save_json(common.REPO_ROOT / "checkpoints" / "hearings" / f"{a.set}.{name}.json", summary)
         return 0

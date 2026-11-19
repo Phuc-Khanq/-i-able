@@ -85,6 +85,9 @@ class Settings:
     # Voice
     sample_rate: int = 16000
     pause_seconds: float = 1.5  # user setting, 1 to 4
+    vad_threshold: float = 0.5  # Silero's speech threshold. A weak voice can stay under it: 0.25 heard 13 more of TORGO
+                                # dev's 355 dysarthric single words (43 -> 30 never heard) but may let noise in; try it
+                                # with the camera on (the mouth gate drops what the mouth didn't say)
     whisper_model: str = "large-v3-turbo"
     whisper_device: str = "cuda"
     whisper_compute_type: str = "float16"  # use "int8" on CPU

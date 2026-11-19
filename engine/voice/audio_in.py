@@ -185,9 +185,16 @@ class VadIterator:
         return None
 
 
-def load_vad(pause_seconds: float):
-    """Silero VAD (the ONNX model bundled with silero-vad; no download, no torch)."""
-    return VadIterator(SileroOnnx(), threshold=VAD_THRESHOLD,
+def load_vad(pause_seconds: float, threshold: float | None = None):
+    """Silero VAD (the ONNX model bundled with silero-vad; no download, no torch). threshold None: settings.vad_threshold
+    (VAD_THRESHOLD if that can't be read)."""
+    if threshold is None:
+        try:
+            from engine.config import settings
+            threshold = float(getattr(settings, "vad_threshold", VAD_THRESHOLD))
+        except Exception:
+            threshold = VAD_THRESHOLD
+    return VadIterator(SileroOnnx(), threshold=threshold,
                        min_silence_duration_ms=int(pause_seconds * 1000),
                        speech_pad_ms=SPEECH_PAD_MS)
 
