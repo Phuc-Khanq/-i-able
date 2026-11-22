@@ -90,6 +90,10 @@ class Engine:
                                     preview=self.preview)
             self.targets = TargetService(bus, settings, probe=self.eyes.probe)   # snap: on a link already?
             self.os_output = OsOutput(bus, driver=self.eyes.driver, scroller=self.eyes.scroller, page=self.page)
+            # "yes" types the card only into a text box; otherwise the user clicks one first (text_focus.py)
+            if bool(getattr(settings, "ask_where_to_type", True)):
+                from engine.eyes.text_focus import focused_text_box
+                self.mode_manager.text_focus = focused_text_box
             # Was the user's mouth moving? For the voice route's "only the user's voice" gate.
             self.mouth = MouthTracker(bus)
             self.mode_manager.mouth = self.mouth     # an eyebrow raise while talking is ignored

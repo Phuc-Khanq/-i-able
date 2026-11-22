@@ -25,7 +25,7 @@ TRIGGER_NOTE = ('Say "Venus" or "Computer" first ("Venus, scroll down") to make 
 
 GESTURES = [
     ("Head", "Move the cursor"),
-    ("Long blink (about 0.4 to 1.6 s, both eyes)", "Left click, snapped onto the nearest button; also says yes"),
+    ("Long blink (about 0.4 to 1.6 s, both eyes)", "Left click, snapped onto the nearest button; also says yes to a question (not to a dictation card: it only clicks, e.g. into the text box the card goes to)"),
     ("Eyebrow raise", "Says yes to a waiting question, preview or search; leaves Scroll mode. Does not click"),
     ("Head shake", "Says no; closes the menu"),
     ("Open the mouth and close it (off by default)", "Right click"),

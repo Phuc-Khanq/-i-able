@@ -182,12 +182,16 @@ class TestModeManagerBlink(Base):
         self.bus.publish(topics.TARGET_RESULT, TargetResult(req.label, True, 520, 310))
         self.assertEqual(self.os(), [(topics.OS_CLICK, {"x": 520, "y": 310})])
 
-    def test_a_blink_answers_a_question_like_a_raise(self):
+    def test_a_blink_never_types_the_dictation_card(self):
+        # Khang, 2026-11-22: a blink put the card's text in by accident. It only clicks now (to pick the text box);
+        # a nod, an eyebrow raise or "yes" types it. A blink still answers a yes/no question (mode_manager.on_gesture).
         self.say("start dictation")
         self.say("hello there")
         self.assertTrue(self.mm.preview)
+        self.look(500, 300)
         self.gesture("blink")
-        self.assertEqual(self.os(), [(topics.OS_TYPE, {"text": "hello there "})])
+        self.assertEqual(self.os(), [(topics.OS_CLICK, {"x": 500, "y": 300})])
+        self.assertTrue(self.mm.preview)
 
     def test_a_blink_is_never_a_right_click_even_with_brow_click_right(self):
         self.mm._brow_click = "right"

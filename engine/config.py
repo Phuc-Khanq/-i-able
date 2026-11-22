@@ -84,7 +84,10 @@ class Settings:
 
     # Voice
     sample_rate: int = 16000
-    pause_seconds: float = 1.5  # user setting, 1 to 4
+    pause_seconds: float = 2.5  # user setting, 1 to 4. 2.5 (Khang, 2026-11-22: our users speak slowly) cut none of
+                                # TORGO dev's 108 dysarthric sentences in two; 1.5 cut 4, 1.0 cut 22. A dictation card
+                                # waits for "yes" or "no" however long the user is quiet (mode_manager CARD_REMIND_S)
+    ask_where_to_type: bool = True  # "yes" types the card only into a text box; otherwise the user clicks one first
     vad_threshold: float = 0.5  # Silero's speech threshold. A weak voice can stay under it: 0.25 heard 13 more of TORGO
                                 # dev's 355 dysarthric single words (43 -> 30 never heard) but may let noise in; try it
                                 # with the camera on (the mouth gate drops what the mouth didn't say)

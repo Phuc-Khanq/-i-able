@@ -89,6 +89,14 @@ SPEECH_GUARD_S = 1.0     # a mouth gesture this soon after the mic heard speech 
 TICK_S = 0.25
 REPEAT_CLICK_S = 3.0      # "click Send" again this soon after Send was clicked is a repeat, not a new click
 HISTORY_STEPS = 20        # "scratch that" can go back this many changes of one preview
+# Choosing where the text goes (Khang, 2026-11-22): "yes" with no text box focused doesn't type; the card waits and
+# asks the user to click a text box (a blink), then types once the click put the focus in one.
+PLACE_CHECK_S = 0.6       # after the blink click, wait this long for the app to move its focus, then look
+PLACE_PROMPT = ("Where should the text go? Move the pointer onto the text box and blink to click it. "
+                "Your words stay on the card.")
+PLACE_AGAIN = "That isn't a text box. Move the pointer onto the text box and blink to click it."
+CARD_REMIND_S = 60.0      # a card left this long with no speech gets one reminder; it is never typed or dropped by time
+CARD_REMINDER = 'Your words are still on the card. Say "yes" to put them in, or "no" to drop them.'
 
 
 
@@ -195,6 +203,13 @@ class ModeManager:
         self._clean: list[dict] | None = None    # the accepted clean words for the current preview
         self._use_clean = True                   # "use original" turns it off for this preview only
         self._pending: tuple[float, Callable[[], None] | None] | None = None  # (deadline, then): a waiting insert
+        # Where the text goes: text_focus() says whether the keyboard focus is in a text box (True / False / None =
+        # can't tell; engine/eyes/text_focus.py, set by main.py). None here = never asked, type as before (tests).
+        self.text_focus: Callable[[], bool | None] | None = None
+        self._placing: list | None = None        # [then]: "yes" was said, the card waits for a text box to be clicked
+        self._place_check_at: float | None = None  # clock time to look at the focus after a blink click
+        self._reminded = False                   # the card's one "still here" reminder after CARD_REMIND_S was sent
+        self._card_since = 0.0                   # clock time the card last changed
         # Whole-passage refine (see _start_refine): starts refine_after_s after the last words, or at once on "yes"
         self.refine_after_s = refine_after_s
         self.refine_min_words = int(getattr(settings, "refine_min_words", 8))
@@ -296,9 +311,12 @@ class ModeManager:
                 # A long blink also clicks in Dictation mode when nothing waits, so the user can click into a
                 # text box while dictating (Khang's live test, Oct 24 night: six blinks there did nothing)
                 clicks_here = self.mode == Mode.POINTER or (self.mode == Mode.DICTATION and gesture.type == "blink")
-                if self.preview or self.search or (clicks_here and not brow_off):
+                # A blink never types the card (Khang, 2026-11-22: a blink put the text in by accident); it only
+                # clicks, so it can pick the text box the card goes into. Nod, eyebrow raise and "yes" type it.
+                card_yes = self.preview and gesture.type != "blink"
+                if card_yes or self.search or (clicks_here and not brow_off):
                     self._ui(messages.GESTURE, gesture=gesture.type)
-                if self.preview:
+                if card_yes:
                     self._insert_preview()
                 elif self.search:
                     if not self.search.preconfirmed:
@@ -532,6 +550,17 @@ class ModeManager:
                     self._start_refine()
             if self._pending and now >= self._pending[0]:
                 self._type_now(self._pending[1])   # the clean-up took too long: type what's showing
+            if self._place_check_at is not None and now >= self._place_check_at:
+                self._place_check_at = None
+                if self._placing is not None and self.preview:
+                    if self._no_text_box():
+                        self._status("info", PLACE_AGAIN)
+                    else:
+                        self._type_now(self._placing[0], checked=True)
+            if self.preview and not self._reminded and now - self._heard_speech >= CARD_REMIND_S \
+                    and now - self._card_since >= CARD_REMIND_S:
+                self._reminded = True
+                self._status("info", CARD_REMINDER)
 
     # ------------------------------------------------------------- UI messages
     def on_ui_set_mode(self, msg: dict) -> None:
@@ -796,6 +825,8 @@ class ModeManager:
             self._status("info", "Can't click yet: the cursor position isn't known")
             return
         self._os(topics.OS_CLICK, x=int(g.x), y=int(g.y))
+        if self._placing is not None:
+            self._place_check_at = self.clock() + PLACE_CHECK_S    # did the click put the focus in a text box?
 
     def _snap_click(self) -> None:
         """Left click at the cursor, snapped onto the clickable thing there (see the module notes): the voice
@@ -1122,9 +1153,24 @@ class ModeManager:
                 return self._preview_text()
         return self._type_now(then)
 
-    def _type_now(self, then: Callable[[], None] | None = None) -> str:
+    def _no_text_box(self) -> bool:
+        """True only when text_focus says for sure that the focus isn't in a text box (None or an error: type)."""
+        if self.text_focus is None:
+            return False
+        try:
+            return self.text_focus() is False
+        except Exception:
+            return False
+
+    def _type_now(self, then: Callable[[], None] | None = None, checked: bool = False) -> str:
         self._pending = None
         text = self._preview_text()
+        if text and not checked and self._no_text_box():
+            # Nowhere to type: keep the card and ask for a text box; the blink click on one types it (tick)
+            self._placing = [then]
+            self._status("info", PLACE_PROMPT)
+            return ""
+        self._placing = None
         if text:
             self._learn(text)
             self._os(topics.OS_TYPE, text=text + " ")
@@ -1136,6 +1182,7 @@ class ModeManager:
         return text
 
     def _discard_preview(self) -> None:
+        self._placing = None
         if self.preview:
             self.preview = []
             self._preview_changed(clean_up=False)
@@ -1185,6 +1232,7 @@ class ModeManager:
         """self.preview just changed: the old clean text and any waiting insert no longer apply.
         Ask for a clean-up of the new text (unless the user fixed a word by hand) and show it raw."""
         self._pending = None
+        self._card_since, self._reminded = self.clock(), False    # the "still here" reminder counts from now
         self._clean = None
         self._refined = None
         self._readings = {}

@@ -17,7 +17,7 @@ States, first match wins:
              the seconds left as a thin bar, and "blink or say yes · say no to cancel" in the hint field. It
              contains the preview's text, so it beats the preview. Stays until the engine closes it.
   preview    "Will type": the words waiting to be typed (unsure words in amber, underlined), your own words in
-             the chip, "Type it / Drop it / Use original", and "blink or say yes" in the hint field. Stays until
+             the chip, "Type it / Drop it / Use original", and "nod or say yes" in the hint field (a blink only clicks). Stays until
              it is typed or dropped. With the trained clean-up model, its other readings are listed under the text
              with the words that pick them ("option two"), and "Check this" replaces "Will type" when it is unsure.
   live       "Hearing": what Whisper hears so far of the sentence being spoken, in grey, about once a second. With
@@ -526,7 +526,8 @@ def draw(c, v: View, levels, fonts) -> int:
         fh = 40
         field_start = len(c.find_all())
         sx, sy = x0 + PAD + 16, fy + fh // 2
-        hints = (("Blink or say", False), ("yes", True), (v.hint_yes, False),
+        # a blink only answers a question; a dictation card takes a nod, an eyebrow raise or "yes" (2026-11-22)
+        hints = (("Blink or say" if v.kind == "confirm" else "Nod or say", False), ("yes", True), (v.hint_yes, False),
                  ("·  say", False), ("no", True), (v.hint_no, False))
         for text, is_key in (h for h in hints if h[0]):
             if is_key:
