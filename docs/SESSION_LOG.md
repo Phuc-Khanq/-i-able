@@ -1,5 +1,19 @@
 # Session log (newest first)
 
+## 2026-11-22 [Face-gesture]: Design of the face-gesture layer (deliverable 2)
+Branch: `eyes-face-gestures` (worktree `D:\CODING PROJ\Diseyeble-face`); records on `voice-cleanup-app`.
+**Done:**
+- Khang OK'd the survey ("Yes, write the design").
+- Read how `engine/eyes` wires gestures today: `service.py` freezes the cursor during a brow raise, a held blink or an open mouth (100 ms lookback, 2 s limit); `mode_manager.py` maps `Gesture.type` to intents per mode; `os_input.py` has whole clicks and key presses but no button-down/up.
+- Wrote `docs/plans/face_behaviours_design.md`: signals per behaviour, strength normalised to the user's calibrated range, one trigger state machine with release level, hold, cooldown and gap rules, sensitivity 1 to 10, pulse/hold/toggle with safe release, actions and bindings, conflict rules (cursor freeze, gesture vs gesture, talking, laughing, eating), global pause, the simulator, replay and recording plan with metrics and a proposed bar, all settings with defaults and reasons, and the files it touches.
+**Measured:** nothing.
+**Decisions:** none yet; D1 to D9 in the design wait for Khang (DECISIONS, Proposed).
+**Still running:** nothing.
+**Problems / blockers:** Khoi's `iable_eye` still not found; `mode_manager.py` is the Dictation chat's and `types.py` is a contract, so both need agreement before code.
+**Next:** Khang's answers to D1 to D9, then deliverable 3 (task list with owners and tests).
+**Khang must do by hand:** read the design and answer D1 to D9.
+**For Cowork:** none new.
+
 ## 2026-11-22 [Face-gesture]: Survey of face-gesture variables (deliverable 1 of the face-gesture layer)
 Branch: `eyes-face-gestures` in the worktree `D:\CODING PROJ\Diseyeble-face` (Khang chose a new branch in this repo); the records are on `voice-cleanup-app` in the main folder.
 **Done:**
