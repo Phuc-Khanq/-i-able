@@ -1,5 +1,25 @@
 # Session log (newest first)
 
+## 2026-11-22 11:00 [Clean-up model]: New record-keeping rule taken in; the two over-editing findings checked
+Branch: voice-cleanup-app · Commits: see `git log` (this entry's files are committed with it)
+**Done:**
+- Re-read CLAUDE.md, STATUS.md and COWORK_NOTES.md (no /wrap-up now; records updated after every finished piece of work). Nothing in COWORK_NOTES is addressed to this chat.
+- Brought my STATUS lines up to date: the hearings are done (by the Dictation chat, 2026-11-19; DECISIONS 2026-11-19), GPU line, and a new Next 5c.
+- Checked the Dictation chat's two findings (STATUS Next 5b) against its row files, no GPU. Both hold. The model is sure about most of the changes, so the unsure flag doesn't cover them.
+**Measured** (Khang's PC; big1 + other hearings, greedy; rows `checkpoints/hearings/libri-dev.cleanup-greedy.jsonl` and `personal-test.cleanup-greedy.jsonl`; my counts from a scratch script that compares words ignoring case and punctuation):
+- LibriSpeech dev, 298 clear sentences, 6,191 words: words wrong 1.50% before the clean-up, 3.28% after (3.21% with hearings). 83 sentences changed: 63 got more word errors, 7 fewer. 44 of the 83 were marked unsure, 39 were not.
+- Khang's 29 recorded phrases, 240 words: 10.0% before, 13.33% after (11.67% with hearings). 8 changed: 6 worse, 2 better; 6 of the 8 not marked unsure. "Refresh." -> "Please refresh the page." is not marked unsure.
+- The Dictation chat counted 76 changed sentences, not 83: a slightly different word comparison. The direction is the same.
+**Decisions:** none.
+**Still running:** nothing. At 10:53 the GPU had 2.9 GB in use at 10%, not from this chat.
+**Problems / blockers:** the clean-up changes clear and short text, and the guard lets the added words through. This is the same kind of over-editing as the `drop_small_words` finding of 2026-11-05.
+**Next:**
+1. Khang's OK on Next 5c: offline guard variants on the existing answers (no GPU), scored on these rows plus dev and the 2,500 test to catch harm.
+2. If the model itself over-edits: more clear and short phrases in its data (Hung's phrases will help), then a one-epoch run.
+3. Hung's 35 hidden-test phrases, when they arrive.
+**Khang must do by hand:** say yes or no to Next 5c; the other items from 2026-11-12 are still open (share Hung's doc, candidate yes or no, mic try-out of "Check this", push).
+**For Cowork:** none.
+
 ## 2026-11-22 10:45 [Dictation]: Own-voice adaptation measured; command rescue and end-of-turn probes; records now kept as we go
 Branch: voice-cleanup-app · Commits: see `git log` (this entry's files are committed with it)
 **Done:**
