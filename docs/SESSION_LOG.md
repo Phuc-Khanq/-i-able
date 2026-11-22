@@ -1,5 +1,27 @@
 # Session log (newest first)
 
+## 2026-11-22 10:45 [Dictation]: Own-voice adaptation measured; command rescue and end-of-turn probes; records now kept as we go
+Branch: voice-cleanup-app · Commits: see `git log` (this entry's files are committed with it)
+**Done:**
+- Ran the personal voice experiment once the GPU was free (2026-11-19 night, again 2026-11-20 with 10 and 20 passes). The first two runs were identical: the trainer stops at 5 passes (55 steps for 132 clips).
+- Closed-set listening for commands: a tool in `engine/voice/finetune/hearing_eval.py` (`--closed-test`, `--closed-summary`) scores each allowed word against the audio with Whisper's decoder (CTranslate2 `align()`). Not in the app.
+- `engine/voice/finetune/turn_eval.py`: asks Smart Turn v3 (Pipecat, BSD-2-Clause, 8 MB ONNX, CPU) whether the speaker has finished, at each pause. Only a 60-clip probe so far; model in `downloads/smart-turn/` (git-ignored).
+- New post box `docs/COWORK_NOTES.md`; CLAUDE.md now says to update the records after every finished piece of work (no /wrap-up).
+**Measured:** Khang's PC, RTX 5080, stock large-v3-turbo, shared with DigiErhu during the command run:
+- Own voice (30 test clips, 241 words), words wrong: stock 25 (10.37%); 5 passes 21 (8.71%); 10 passes 19 (7.88%); 20 passes 22 (9.13%). LibriSpeech dev 1.45% -> 1.36 to 1.55%. Half the gain is names and number spelling; "Open Chrome" -> "Open crawl" in every adapted run.
+- Command rescue, TORGO's 44 command-like words (240 clips from 6 tuning speakers, 86 from the test speakers F04 and M01, not used to choose the rule), right commands: app today 45.0% / 60.5%; the app plus a rescue when it would do nothing (best word within 0 of Whisper's own reading, 2 ahead of the runner-up; `closed_pick(r, 0, 2)`) 60.0% / 68.6%; wrong command picked 0 -> 1 and 1 -> 2. Other single words trigger a command 2.8% -> 6.0% (tune) and 3.2% -> 6.1% (test); sentences never. Scoring 44 words takes p50 290 to 350 ms. The free reading alone gets 58.8% / 70.9%, so part of the gain is just keeping what the app's noise filter drops.
+- Smart Turn, 60-clip probe (10 sentences): "finished" median 0.127 at pauses inside speech and 0.242 at the true end, so it separates them poorly on this speech. Too few clips to conclude; 50 ms per question on the CPU.
+**Decisions:** no onboarding step for adapting Whisper to one voice yet (DECISIONS 2026-11-22).
+**Still running:** none (GPU free 2026-11-20 09:56).
+**Problems / blockers:** none. Not tried with mic and camera: everything from 2026-11-19 (checklist in `docs/dictation_learning_from_wispr.md`).
+**Next:**
+1. Command rescue, if Khang wants it: wire it for yes or no while a card waits, and "resume" while paused (small word sets), shown as "Heard: ...".
+2. Smart Turn on the full TORGO dev set before judging it.
+3. Khang: mic and camera checklist; the pause setting (2.5 s proposed); push approval (about 40 commits unpushed); the Speech Accessibility Project proposal.
+**Khang must do by hand:** the mic and camera checklist; decide the 2.5 s pause; approve the push.
+**For Cowork:** see `docs/COWORK_NOTES.md`, "Code to Cowork".
+**Notes from Khang:** "let's not use the wrap up. You just lock everything, update everything every single time we finish something" (2026-11-22).
+
 ## 2026-11-12 15:01 [Dictation]: Voice fixes, spell-it, the word list, and the dysarthria simulator (stopped: it fails)
 Branch: voice-cleanup-app · Commits: 8fd59f3 voice: fix words on the dictation card by voice; 7ac3a8f docs: add the Dictation chat to Code chats now; b71333c voice: spell a word letter by letter, and a personal word list Whisper leans toward; c33c11b voice: dysarthria simulator experiment (kept as a record; it failed the bar); 7cde0e0 docs: stop the dysarthria simulator; plus this wrap-up. All but the wrap-up pushed to origin (Khang's OK) · Uncommitted: engine/capture/, tests/test_capture.py (draft, untracked on purpose)
 **Done:**
