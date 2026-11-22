@@ -16,14 +16,15 @@ Branch: voice-cleanup-app · Commits: see `git log` (this entry's files are comm
 - Same rule on any length: blocks 104 test answers, loses 53 right ones. Dropped-run of 3 / 2 content words: loses 44 / 268 right ones, for 1 / 8 better LibriSpeech rows.
 - LibriSpeech with hearings: 114 word edits, 112 in sentences with no filler or repeat; 54 swap a content word (many spelling variants the reference counts wrong), 18 add and 16 drop a small word, 14 swap a small word, 12 drop content words. Not guardable from the text alone.
 - 1,252 tests pass, compile check clean.
-**Decisions:** none made. Proposed (DECISIONS, Proposed): the short-phrase rule in `check_cleanup`.
+- Khang OK'd the rule (13:00); added it to `check_cleanup` in the shared `rewrite.py` (`gained_content_words`, `CLEANUP_SHORT_INPUT = 6`, optional `hearings` argument passed by `Rewriter._check` and `_readings`). A first version also blocked swapped words and broke the real-word fixes in the unit tests ("pitcher" -> "picture"), so it now counts only a net gain of content words. Replay with the shipped rule: Khang's 29 phrases 11.67% -> 10.00%; on the 2,500 test 1 more answer blocked, no score change; dev, TORGO, LibriSpeech unchanged. 7 new tests in `tests/test_cleanup_model.py`; 1,259 tests pass, compile check clean. I messaged the Dictation chat before editing (delivery not confirmed).
+**Decisions:** the short-phrase rule in `check_cleanup`, agreed by Khang 2026-11-22 (DECISIONS 2026-11-22).
 **Still running:** nothing. At 10:53 the GPU had 2.9 GB in use at 10%, not from this chat.
 **Problems / blockers:** the clean-up changes clear and short text, and the guard lets the added words through. This is the same kind of over-editing as the `drop_small_words` finding of 2026-11-05.
 **Next:**
-1. Khang's OK to add the short-phrase rule to the shared `rewrite.py` (then message the Dictation chat, add tests, recheck on Hung's hidden phrases).
+1. Recheck the rule on Hung's hidden phrases (short ones especially).
 2. If the over-editing of clear text matters: more clear and short phrases in the model's data (Hung's phrases will help), then a one-epoch run; or Whisper's word confidence in the rewrite request (contract change).
 3. Hung's 35 hidden-test phrases, when they arrive.
-**Khang must do by hand:** yes or no to the short-phrase rule in `rewrite.py`; the other items from 2026-11-12 are still open (share Hung's doc, candidate yes or no, mic try-out of "Check this", push).
+**Khang must do by hand:** try short phrases with the mic ("refresh", "close tab") and see that nothing is added; the other items from 2026-11-12 are still open (share Hung's doc, candidate yes or no, mic try-out of "Check this", push).
 **For Cowork:** none.
 
 ## 2026-11-22 10:45 [Dictation]: Own-voice adaptation measured; command rescue and end-of-turn probes; records now kept as we go

@@ -35,8 +35,6 @@ BIG1_TEST = "2026-11-03_big1-q8_0-greedy_cleanup_t1_short_big1_test"
 WHISPER_SETS = {"libri-dev": "libri-dev.cleanup-greedy.jsonl", "personal-test": "personal-test.cleanup-greedy.jsonl",
                 "torgo-dev": "torgo-dev.cleanup-greedy.jsonl"}
 
-SPELLED_CLOSE = 0.7        # "wants" / "want": the same word, not a new one
-MIN_WORD = 3               # "go", "ok": too short to count as an added word
 
 
 @dataclass(frozen=True)
@@ -50,7 +48,7 @@ class Variant:
     drop_run: int = 0          # also block when this many content words in a row were dropped and not repeated
 
 
-VARIANTS = [Variant("check_cleanup today"),
+VARIANTS = [Variant("check_cleanup before the short-phrase rule"),
             Variant("+ no new word, input up to 3 words", 3, 1),
             Variant("+ no new word, input up to 6 words", 6, 1),
             Variant("+ no new word, any length", 1000, 1),
@@ -75,32 +73,22 @@ def dropped_runs(original: str, clean: str) -> list[list[str]]:
 
 
 def new_words(original: str, clean: str, hearings=(), context: str = "", words=()) -> list[str]:
-    """Content words in `clean` that nothing said or gave: not in what was heard (any hearing), the text typed
-    before, or the word list; not spelled close to a heard word ("wants" / "want"); not a sound-alike of one to
-    four heard words in a row ("pred a zone" -> prednisone), by the looser test the word list gets."""
-    from engine.voice.rewrite import LIST_SOUND_ALIKE, _content, _sounds_heard, normalize_words
+    """Content words `clean` gained that nothing said or gave (engine.voice.rewrite.gained_content_words, the rule
+    now in check_cleanup): not in the heard text, a hearing, the text typed before or the word list, and more of
+    them than the words dropped (a swap is a fix)."""
+    from engine.voice.rewrite import gained_content_words
 
-    orig_w = normalize_words(original)
-    given = {w for text in (original, *hearings, context, *words) for w in normalize_words(text)}
-    added = []
-    for w in sorted(_content(normalize_words(clean))):
-        if len(w) < MIN_WORD or w in given:
-            continue
-        if any(SequenceMatcher(a=w, b=g).ratio() >= SPELLED_CLOSE for g in given if len(g) >= MIN_WORD):
-            continue
-        if _sounds_heard(w, orig_w, LIST_SOUND_ALIKE, longest=4):      # the looser test the word list gets
-            continue
-        added.append(w)
-    return added
+    return gained_content_words(original, clean, [*hearings, context, *words])
 
 
 def blocked(variant: Variant, original: str, clean: str, hearings=(), context: str = "", words=()) -> str | None:
-    """Why this guard blocks the answer, or None. check_cleanup first (it is the guard in the app today)."""
+    """Why this guard blocks the answer, or None. check_cleanup without its short-phrase rule comes first (the guard
+    before 2026-11-22); the variant "input up to 6 words" is what check_cleanup does now."""
     from engine.voice.rewrite import check_cleanup, normalize_words
 
     from engine.voice.rewrite import CHANGE_OF_MIND
 
-    why = check_cleanup(original, clean, list(words), context)
+    why = check_cleanup(original, clean, list(words), context, hearings, short_input=0)   # the guard before 2026-11-22
     if why or not variant.max_input:
         return why
     if len(normalize_words(original)) <= variant.max_input:

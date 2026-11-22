@@ -424,6 +424,35 @@ class TestOwnDoubt(unittest.TestCase):
             self.assertEqual(second["n_probs"], 1)
 
 
+class TestShortPhraseRule(unittest.TestCase):
+    """A short input may not gain a content word nobody said (2026-11-22; eval/dictation_cleanup/guard_replay.py)."""
+
+    def test_the_words_the_model_added_to_a_short_phrase(self):
+        self.assertIn("words added: page please", check_cleanup("refresh", "Please refresh the page."))
+        self.assertIn("words added: document", check_cleanup("paste down", "Please paste the document down."))
+
+    def test_a_word_swapped_for_another_is_a_fix_not_an_addition(self):
+        self.assertIsNone(check_cleanup("send the pitcher to mom now", "Send the picture to Mom now."))
+        self.assertIsNone(check_cleanup("meet me at the bank", "Meet me at the bench."))
+
+    def test_small_words_spelling_variants_and_sound_alikes_are_fine(self):
+        self.assertIsNone(check_cleanup("close tab", "Close the tab."))
+        self.assertIsNone(check_cleanup("he wants it", "He want it."))
+        self.assertIsNone(check_cleanup("pred a zone at noon", "Prednisone at noon."))
+
+    def test_a_hearing_the_context_or_the_word_list_gave_the_word(self):
+        self.assertIsNone(check_cleanup("meet me at the bank", "Meet me at the bench.", hearings=["meet me at the bench"]))
+        self.assertIsNone(check_cleanup("send it", "Send the photos.", context="The photos are ready."))
+        self.assertIsNone(check_cleanup("tell okafor", "Tell Okafor.", ["Okafor"]))
+
+    def test_a_longer_input_is_not_held_to_it(self):
+        heard = "can you send me the the file by friday morning"
+        self.assertIsNone(check_cleanup(heard, "Can you send me the file by Friday morning, with the invoice attached?"))
+
+    def test_it_can_be_switched_off(self):
+        self.assertIsNone(check_cleanup("refresh", "Please refresh the page.", short_input=0))
+
+
 class FakeBus:
     def __init__(self):
         self.sent = []
@@ -475,6 +504,17 @@ class TestHearings(unittest.TestCase):
         w.process({"id": 2, "mode": "refine", "text": "meet me at the bank", "marked": "meet me at the (?)bank(?)",
                    "hearings": ["meet me at the bench"]})
         self.assertIn("Heard: meet me at the bank\nOther hearings: meet me at the bench\n", model.server.prompts[0])
+
+    def test_a_hearing_excuses_a_new_word_in_a_short_phrase(self):
+        from engine.core import topics
+
+        w, _model = self.worker()
+        w.process({"id": 1, "text": "meet me at", "hearings": ["meet me at the bench"]})
+        w.process({"id": 2, "text": "meet me at"})
+        results = [p for t, p in w.bus.sent if t == topics.REWRITE_RESULT]
+        self.assertTrue(results[0]["used"])                  # "bench" was heard in another hearing
+        self.assertFalse(results[1]["used"])                 # nothing said "bench": the user's own words
+        self.assertEqual(results[1]["clean"], "meet me at")
 
     def test_the_old_model_takes_them_without_breaking(self):
         class Old(Rewriter):                           # the transformers model, without loading it

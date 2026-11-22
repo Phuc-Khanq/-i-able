@@ -410,11 +410,47 @@ def _stutter(name: str) -> bool:
     return len(name) <= 2 or "-" in name or name.endswith("'")
 
 
-def check_cleanup(original: str, clean: str, words: list[str] = (), context: str = "") -> str | None:
+CLEANUP_SHORT_INPUT = 6            # up to this many heard words: the clean-up may not add a content word (2026-11-22)
+SPELLED_CLOSE = 0.7                # "wants" / "want": the same word, not a new one
+
+
+def new_content_words(original: str, clean: str, given=()) -> list[str]:
+    """Content words in `clean` that nothing said or gave: not in `original` or any text in `given` (other hearings,
+    the text typed before, the word list); not spelled close to one of them ("wants" / "want"); not a sound-alike of
+    one to four heard words in a row ("pred a zone" -> prednisone), by the looser test the word list gets."""
+    from difflib import SequenceMatcher
+
+    orig_w = normalize_words(original)
+    known = {w for text in (original, *given) for w in normalize_words(text)}
+    added = []
+    for w in sorted(_content(normalize_words(clean))):
+        if len(w) < 3 or w in known:
+            continue
+        if any(SequenceMatcher(a=w, b=k).ratio() >= SPELLED_CLOSE for k in known if len(k) >= 3):
+            continue
+        if _sounds_heard(w, orig_w, LIST_SOUND_ALIKE, longest=4):
+            continue
+        added.append(w)
+    return added
+
+
+def gained_content_words(original: str, clean: str, given=()) -> list[str]:
+    """new_content_words, but only when `clean` has more content words than were said: a word swapped for another
+    ("pitcher" -> "picture") is a fix, an extra one ("Refresh." -> "Please refresh the page.") is an invention."""
+    added = new_content_words(original, clean, given)
+    kept = set(normalize_words(clean))
+    lost = [w for w in _content(normalize_words(original)) - FILLERS if len(w) >= 3 and w not in kept]
+    return added if len(added) > len(lost) else []
+
+
+def check_cleanup(original: str, clean: str, words: list[str] = (), context: str = "", hearings=(),
+                  short_input: int = CLEANUP_SHORT_INPUT) -> str | None:
     """Why the trained model's text must not be used, or None if it's safe to show. `words` is the user's word
     list: a name or term on it isn't invented, and may replace a name the recognizer got wrong. `context`, what
     was typed earlier in this dictation, counts the same way ("Dr. Alvarez" typed before). A list word must also
-    sound like something heard; what was typed earlier needn't."""
+    sound like something heard; what was typed earlier needn't. `hearings` are Whisper's other versions of the text:
+    words in them aren't new. A short input (up to `short_input` words, 0 = never) may not gain a content word:
+    "Refresh." -> "Please refresh the page." (replay of saved answers: eval/dictation_cleanup/guard_replay.py)."""
     terms = list(words)
     words = [*words, context] if context else list(words)
     if not clean or not clean.strip():
@@ -459,6 +495,10 @@ def check_cleanup(original: str, clean: str, words: list[str] = (), context: str
     from_list = bool(listed & (clean_set - set(orig_w)))      # a word-list name took the place of a misheard one
     if lost and not changed_mind and not from_list:
         return "name missing: " + " ".join(lost)
+    if short_input and len(orig_w) <= short_input:
+        added = gained_content_words(original, clean, [*terms, context, *hearings])
+        if added:
+            return "words added: " + " ".join(added)
     return None
 
 
@@ -717,13 +757,13 @@ class Rewriter:
         return answer.text, cut_off
 
     def _check(self, original: str, clean: str, unsure: set[str] | None = None, refine: bool = False,
-               context: str = "") -> str | None:
+               context: str = "", hearings=()) -> str | None:
         """The guard for this backend: check_cleanup for the trained model, else check_rewrite / check_refine."""
         if self.backend == "llamacpp":
-            return check_cleanup(original, clean, self.words, context)
+            return check_cleanup(original, clean, self.words, context, hearings)
         return check_refine(original, clean, unsure) if refine else check_rewrite(original, clean)
 
-    def _readings(self, original: str, clean: str, context: str) -> tuple[list[str], bool]:
+    def _readings(self, original: str, clean: str, context: str, hearings=()) -> tuple[list[str], bool]:
         """The trained model's other readings that pass the same guard (an invented "gluten-free takeout" doesn't),
         and whether it was unsure. Nothing for the transformers model."""
         a = self.last_answer
@@ -736,7 +776,7 @@ class Rewriter:
             other = _content(normalize_words(alt))
             if (other - main - heard) and not (main - other):
                 continue                  # only adds words on top of the main reading: "gluten-free takeout"
-            if key not in seen and check_cleanup(original, alt, self.words, context) is None:
+            if key not in seen and check_cleanup(original, alt, self.words, context, hearings) is None:
                 seen.add(key)
                 alts.append(alt)
         return alts, a.uncertain
@@ -757,9 +797,10 @@ class Rewriter:
             return self._fallback(text, f"error: {exc}", round((time.perf_counter() - t0) * 1000, 1))
         ms = round((time.perf_counter() - t0) * 1000, 1)
         clean = tidy(output, text)
-        reason = "cut off (token or time cap)" if cut_off else self._check(text, clean, context=context)
+        reason = ("cut off (token or time cap)" if cut_off
+                  else self._check(text, clean, context=context, hearings=hearings))
         if reason is None:
-            alts, unsure = self._readings(text, clean, context)
+            alts, unsure = self._readings(text, clean, context, hearings)
             return RewriteOutcome(text, clean, True, ms, None, output, alts, unsure)
         return self._fallback(text, reason, ms, output)
 
@@ -800,9 +841,10 @@ class Rewriter:
         ms = round((time.perf_counter() - t0) * 1000, 1)
         refined = tidy(output, text)
         reason = ("cut off (token or time cap)" if cut_off
-                  else self._check(text, refined, unsure_words(marked), refine=True, context=context))
+                  else self._check(text, refined, unsure_words(marked), refine=True, context=context,
+                                   hearings=hearings))
         if reason is None:
-            alts, unsure = self._readings(text, refined, context)
+            alts, unsure = self._readings(text, refined, context, hearings)
             return RewriteOutcome(text, refined, True, ms, None, output, alts, unsure)
         return RewriteOutcome(text, text, False, ms, reason, output)
 
