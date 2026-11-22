@@ -1,0 +1,79 @@
+{
+  "cells": [
+    "bright/near",
+    "bright/normal",
+    "bright/far",
+    "dim/near",
+    "dim/normal",
+    "dim/far",
+    "backlit/near",
+    "backlit/normal",
+    "backlit/far"
+  ],
+  "gates_version": 1,
+  "lost_if_ok_frac_below": 0.5,
+  "selection_rule": {
+    "exams_scored_once": true,
+    "metric": "median_px_nonexam_forward",
+    "tie_order": [
+      "ridge",
+      "kernel_ridge",
+      "mlp"
+    ],
+    "tie_tol_px": 2.0
+  },
+  "settled_window_ms": [
+    400,
+    1200
+  ],
+  "targets": {
+    "V1": {
+      "all_max_px": 120.0,
+      "cell_max_px": 150.0,
+      "kind": "OPEN"
+    },
+    "V2": {
+      "boot_resamples": 2000,
+      "boot_seed": 20261117,
+      "kind": "OPEN",
+      "max_loss": 0.2,
+      "max_ratio": 1.5,
+      "min_dots": 30
+    },
+    "V3": {
+      "kind": "OPEN",
+      "min_rest_s": 20.0,
+      "rest_rms_max_px": 2.0,
+      "skip_first_s": 2.0
+    },
+    "V4": {
+      "false_moves_per_min_max": 1.0,
+      "kind": "OPEN",
+      "min_natural_s": 60.0,
+      "move_px": 20.0
+    },
+    "V5": {
+      "kind": "LIVE",
+      "max_s": 8.0,
+      "n_targets": 8,
+      "repeats": 2
+    },
+    "V6": {
+      "graceful_fps": 15.0,
+      "kind": "LIVE",
+      "min_fps": 25.0,
+      "min_s_per_cell": 20.0
+    },
+    "V7": {
+      "kind": "OPEN",
+      "min_frames": 10000,
+      "p95_max_ms": 5.0
+    },
+    "V8": {
+      "first_cal_max_s": 60.0,
+      "kind": "LIVE",
+      "recal_max_s": 10.0,
+      "runs": 3
+    }
+  }
+}
