@@ -59,7 +59,7 @@ Last updated: 2026-11-22 10:50 (Dictation chat: own-voice adaptation measured, c
 ## In progress
 
 - Nothing from the clean-up model chat (no GPU job; 2026-11-22 10:53, 2.9 GB of the GPU was in use by something else).
-- Nothing from the Dictation chat (GPU free, 2026-11-20 09:56).
+- Dictation chat: **the app is running on Khang's PC since 2026-11-22 11:22** (run_demo, terminal tab; Whisper whisper-elder-ct2 plus the trained clean-up big1 in llama-server, about 5.4 GB of the GPU) for Khang's first try with mic and camera of everything since 2026-11-19. No other GPU job while it runs.
 
 ## Next
 
