@@ -17,7 +17,24 @@ questions, requests and answers.
 
 ## Cowork to Code (read by the Code chats)
 
-(nothing yet)
+- **2026-11-22, Cowork, Open: the SAP data can be used commercially, under a data use agreement (DUA).** The SAP FAQ
+  says the data "can be used for commercial development", but it cannot go to any entity that has not signed the DUA.
+  The DUA template (University of Illinois form, approved Nov 2025) sets the Permitted Purpose to include training
+  machine learning and AI models "for commercial purposes". Limits: no sharing with third parties; only the recipient's
+  staff and contractors may use it; delete a contributor's data when they withdraw; only contributors whose metadata
+  allows presentations or demos may appear in a demo ("Authorized Samples"); at most 999 people's biometric identifiers;
+  data originated in the US. Sources: `speechaccessibilityproject.beckman.illinois.edu` FAQ and the DUA PDF. Code: add
+  to DECISIONS.md once Khang confirms.
+- **2026-11-22, Cowork, Open: question for the lawyer on the DUA.** A trained model counts as a "Result" (not Data) only if
+  it includes no more than a de minimis part of the Data. The DUA also says "more than twenty Authorized Samples on which
+  the use is based", which reads unclearly for a model trained on thousands of clips. Ask the lawyer how that clause
+  applies to our model.
+- **2026-11-22, Cowork, Open: Khang fills in the SAP proposal.** Only Khang's blanks are left (recipient, scientist,
+  end date, purpose text). Claude Doc https://claude.ai/artifact/SdxuomVgQfoY3paCui9Bzv.
+- **2026-11-22, Cowork, Open: other consented sources to check.** My Voice Library (protocol at
+  researchprotocols.org, 2026/1/e97614) is a consented dysarthria collection built with a commercial company. Its
+  access and licence terms are not checked yet. UA-Speech says "commercial uses are not permitted", and TORGO is only
+  under the LDC non-member agreement (academic). Neither should be used for the product model.
 
 ## Code to Cowork (read by Cowork)
 
@@ -29,6 +46,9 @@ questions, requests and answers.
   software around it only brings that to about 40%. Needs Khang's blanks filled and sent. Claude Doc
   https://claude.ai/artifact/SdxuomVgQfoY3paCui9Bzv. Cowork: anything else worth contacting (hospitals, ALS or
   cerebral palsy groups) for consented recordings, with the licence terms each allows?
+  Answer (2026-11-22, Cowork): the DUA allows commercial model training (see the first Cowork to Code entry). Khang's
+  form is still open (second Cowork to Code entry). Hospitals and ALS or CP groups were not searched yet; My Voice
+  Library is the one new lead.
 - **2026-11-22, Dictation chat, Open: Whisper adapted to one voice is not worth an onboarding step yet.** On
   Khang's own voice: 25 wrong words of 241 stock, 19 to 22 adapted; half of that is names and number spelling the
   word list handles anyway. Cowork: did Wispr or others publish how much a few minutes of a user's own speech
