@@ -33,13 +33,14 @@ SETS = {
     "libri-dev": ("dev", "librispeech"),
     "libri-test": ("test", "librispeech"),
     "personal-test": ("test", "personal"),                     # the personal pack (Khang's voice, his own mic)
+    "torgo-all": (None, "torgo"),        # every TORGO speaker (stock Whisper never saw any): --closed-test only
 }
 CUTOFFS = (0.3, 0.5, 0.7, 0.8, 0.9)
 PROMPT_CHARS = 300          # the text before the cursor: the last sentences, cut at a word
 
 
 def pick(clips, split: str, source: str, limit: int | None):
-    rows = sorted((c for c in clips if c.split == split and c.source == source), key=lambda c: c.path)
+    rows = sorted((c for c in clips if split in (None, c.split) and c.source == source), key=lambda c: c.path)
     return rows[:limit] if limit else rows
 
 
@@ -342,6 +343,189 @@ def vad_test(clips, data_dir: Path, model, log, pause: float | None = None, thre
     return out
 
 
+# Closed-set listening, for commands. TORGO's "short words" are like voice commands: yes, no, the arrows, digits and
+# the radio alphabet (44 words, as TORGO writes them). Instead of Whisper writing down anything it likes, it can score
+# each allowed phrase against the audio (CTranslate2's align(): the probability of a given text, token by token) and
+# pick the best, rejecting it when even the best is far less likely than Whisper's own free reading.
+CLOSED_SET = ("yes no up down left right forward back select menu zero one two three four five six seven eight nine "
+              "alpha charlie delta echo foxtrot golf hotel juliet kilo lima mike november oscar papa quebec romeo "
+              "sierra tango uniform victor whisky xray yankee zulu").split()
+_DIGITS = "zero one two three four five six seven eight nine".split()
+_SPELLINGS = {"xray": ("X-ray", "Xray", "X-Ray"), "whisky": ("Whisky", "Whiskey")}
+_SAME = {"x-ray": "xray", "whiskey": "whisky", "juliette": "juliet", **{str(i): w for i, w in enumerate(_DIGITS)}}
+TEST_SPEAKERS = ("F04", "M01")       # TORGO's test speakers: report only, never used to pick a threshold
+
+
+def closed_forms(word: str) -> list[str]:
+    """How Whisper may write a closed-set word: "Yes." or "Yes", "Seven." or "7."."""
+    base = list(_SPELLINGS.get(word, (word.capitalize(),)))
+    if word in _DIGITS:
+        base.append(str(_DIGITS.index(word)))
+    return [b + end for b in base for end in (".", "")]
+
+
+def closed_word(text: str) -> str | None:
+    """Whisper's free text as one closed-set word, or None: "Seven." and "7" -> seven; "Yes, sir." -> None."""
+    import re
+
+    words = [w for w in re.sub(r"[^\w\s'-]", " ", str(text).lower()).split() if w.strip("-'")]
+    if len(words) != 1:
+        return None
+    w = _SAME.get(words[0], words[0])
+    return w if w in CLOSED_SET else None
+
+
+class TextScorer:
+    """log P(text | audio) from Whisper's decoder for texts we choose (teacher-forced), one encoder pass per clip:
+    CTranslate2's align() returns each given token's probability. It gives the end token no probability (it scores
+    text tokens only), so a text's score doesn't say whether more speech follows it: compare texts of similar length."""
+
+    def __init__(self, model):
+        import importlib
+
+        self.m = model
+        tok_mod = importlib.import_module("faster_whisper.tokenizer")
+        self.tok = tok_mod.Tokenizer(model.hf_tokenizer, model.model.is_multilingual, task="transcribe",
+                                     language="en")
+        self.start = list(self.tok.sot_sequence) + [self.tok.no_timestamps]
+        self._tokens: dict[str, list[int]] = {}
+
+    def encode(self, audio):
+        import numpy as np
+
+        features = self.m.feature_extractor(np.asarray(audio, dtype=np.float32))
+        frames = self.m.feature_extractor.nb_max_frames
+        n = min(features.shape[-1], frames)
+        features = features[:, :frames]
+        if features.shape[-1] < frames:
+            features = np.pad(features, ((0, 0), (0, frames - features.shape[-1])))
+        return self.m.encode(features), n
+
+    def tokens(self, text: str) -> list[int]:
+        if text not in self._tokens:
+            self._tokens[text] = self.tok.encode(" " + text.strip())
+        return self._tokens[text]
+
+    def score(self, encoded, n_frames: int, texts: list[str]) -> list[float]:
+        import math
+
+        import ctranslate2
+        import torch
+
+        enc = torch.as_tensor(encoded, device="cuda")
+        batch = enc.expand(len(texts), -1, -1).contiguous()
+        res = self.m.model.align(ctranslate2.StorageView.from_array(batch), self.start,
+                                 [self.tokens(t) for t in texts], [n_frames] * len(texts))
+        return [round(sum(math.log(max(p, 1e-12)) for p in r.text_token_probs), 3) for r in res]
+
+
+def closed_set_test(clips, data_dir: Path, model, log) -> dict:
+    """Every clip (in the closed set or not), free reading vs closed-set scoring. Rows to <set>.closed.jsonl; the
+    numbers come from closed_set_summary(), which can be rerun on the rows."""
+    from engine.voice.dictation import NO_SPEECH_SKIP, Dictation, short_unsure, words_to_text
+
+    d = Dictation(model=model)
+    scorer = TextScorer(model)
+    forms = [(w, f) for w in CLOSED_SET for f in closed_forms(w)]
+    dest = common.REPO_ROOT / "checkpoints" / "hearings" / "closed_rows.jsonl"
+    rows = []
+    log(f"{len(clips)} clips; {len(CLOSED_SET)} words, {len(forms)} written forms; rows to {dest}")
+    with open(dest, "w", encoding="utf-8") as f:
+        for i, c in enumerate(clips):
+            audio = common.load_audio(c.audio_path(data_dir))
+            t0 = time.perf_counter()
+            raw = d.transcribe(audio, keep_unsure=True)
+            t1 = time.perf_counter()
+            free = words_to_text(raw)
+            app = "" if (d.last_no_speech > NO_SPEECH_SKIP or short_unsure(raw)) else free
+            encoded, n = scorer.encode(audio)
+            texts = [t for _, t in forms] + ([free] if free.strip() else [])
+            scores = scorer.score(encoded, n, texts)
+            t2 = time.perf_counter()
+            best: dict[str, tuple[float, int]] = {}
+            for (w, t), s in zip(forms, scores):
+                if s > best.get(w, (-1e9, 0))[0]:
+                    best[w] = (s, len(scorer.tokens(t)))
+            ranked = sorted(best.items(), key=lambda x: -x[1][0])
+            ref = closed_word(c.text)
+            row = {"path": c.path, "speaker": c.speaker, "group": c.group, "ref": c.text, "in_set": ref is not None,
+                   "word": ref, "free": free, "app": app, "free_word": closed_word(free), "app_word": closed_word(app),
+                   "free_score": scores[-1] if free.strip() else None,
+                   "free_tokens": len(scorer.tokens(free)) if free.strip() else 0,
+                   "free_words": len(free.split()),
+                   "top": [[w, s, n] for w, (s, n) in ranked[:3]],
+                   "ref_rank": [w for w, _ in ranked].index(ref) + 1 if ref else None,
+                   "free_ms": round(1000 * (t1 - t0)), "score_ms": round(1000 * (t2 - t1))}
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            rows.append(row)
+            if (i + 1) % 200 == 0:
+                log(f"  {i + 1}/{len(clips)}")
+    return closed_set_summary(rows, log)
+
+
+CLOSED_SHORT = 3          # only a free reading this short (words) can be a closed-set word; longer is never scored
+CLOSED_EMPTY_FLOOR = -3.0  # Whisper wrote nothing: the best word needs at least this score (minus the margin)
+
+
+def closed_pick(r: dict, margin: float, gap: float = 0.0) -> str | None:
+    """The closed-set word for a row, or None: the best-scoring word when the free reading is short, the best word
+    scores at least the free reading's score minus `margin`, and beats the runner-up by `gap`."""
+    if r["free_words"] > CLOSED_SHORT:
+        return None
+    (word, score, *_), runner = r["top"][0], (r["top"][1][1] if len(r["top"]) > 1 else -1e9)
+    if score - runner < gap:
+        return None
+    floor = CLOSED_EMPTY_FLOOR if r["free_score"] is None else r["free_score"]
+    return word if score >= floor - margin else None
+
+
+def closed_set_summary(rows: list[dict], log, margins=(0.0, 1.0, 2.0, 3.0, 4.0, 6.0), gaps=(0.0, 1.0, 2.0)) -> dict:
+    """Per speaker group (tuning speakers, test speakers): in-set clips right / wrong / nothing done, and how often a
+    clip that isn't a closed-set word would trigger one, for the free reading and for closed-set scoring (closed_pick)
+    alone and after the free reading (hybrid: a free reading that is a closed-set word is taken as it is)."""
+    import statistics
+
+    out = {}
+    for name, keep in (("tune", lambda r: r["speaker"] not in TEST_SPEAKERS),
+                       ("test", lambda r: r["speaker"] in TEST_SPEAKERS)):
+        sel = [r for r in rows if keep(r)]
+        ins = [r for r in sel if r["in_set"]]
+        outs = [r for r in sel if not r["in_set"]]
+        words = [r for r in outs if "words" in r["group"]]
+        res = {"in_set": len(ins), "other_words": len(words), "sentences": len(outs) - len(words)}
+
+        def tally(pick):
+            right = sum(1 for r in ins if pick(r) == r["word"])
+            wrong = sum(1 for r in ins if pick(r) not in (None, r["word"]))
+            fa_w = sum(1 for r in words if pick(r) is not None)
+            fa_s = sum(1 for r in outs if "words" not in r["group"] and pick(r) is not None)
+            return {"right": right, "wrong": wrong, "nothing": len(ins) - right - wrong,
+                    "false_other_words": fa_w, "false_sentences": fa_s}
+
+        res["free"] = tally(lambda r: r["free_word"])
+        res["app"] = tally(lambda r: r["app_word"])
+        res["closed_always"] = tally(lambda r: r["top"][0][0])
+        for m in margins:
+            for g in gaps:
+                res[f"closed_m{m:g}_g{g:g}"] = tally(lambda r, m=m, g=g: closed_pick(r, m, g))
+                res[f"hybrid_m{m:g}_g{g:g}"] = tally(lambda r, m=m, g=g: r["free_word"] or closed_pick(r, m, g))
+        res["ref_in_top1"] = sum(1 for r in ins if r["ref_rank"] == 1)
+        res["ref_in_top3"] = sum(1 for r in ins if r["ref_rank"] and r["ref_rank"] <= 3)
+        res["score_ms_p50"] = statistics.median(r["score_ms"] for r in sel) if sel else None
+        res["free_ms_p50"] = statistics.median(r["free_ms"] for r in sel) if sel else None
+        out[name] = res
+        log(f"--- {name} speakers: {len(ins)} closed-set clips, {len(words)} other single words, "
+            f"{res['sentences']} sentences; scoring p50 {res['score_ms_p50']} ms (free reading {res['free_ms_p50']} ms)")
+        log(f"   the right word scores best: {pct(res['ref_in_top1'], len(ins))}; in the top 3: "
+            f"{pct(res['ref_in_top3'], len(ins))}")
+        for k, v in res.items():
+            if isinstance(v, dict):
+                log(f"   {k:16s} right {pct(v['right'], len(ins))}, wrong {v['wrong']}, nothing {v['nothing']}; "
+                    f"triggered by other words {pct(v['false_other_words'], len(words))}, "
+                    f"by sentences {pct(v['false_sentences'], res['sentences'])}")
+    return out
+
+
 def fix_simulation(rows_path: Path, text_key: str, log, mic: str = "wav_headMic") -> dict:
     """Would learning from fixes (engine/voice/personal_fixes.py) pay off for a dysarthric speaker? Replays a set's
     rows in recording order (one microphone, so no utterance counts twice): each clip first gets the fixes learned
@@ -471,8 +655,16 @@ def main(argv: list[str] | None = None) -> int:
                    help="instead: rare words of the same chapter or session as hotwords (names on screen)")
     p.add_argument("--variants", default=None, const=",".join(VARIANTS), nargs="?",
                    help="instead: the app's pass with different decoding options (VARIANTS; a comma list picks some)")
+    p.add_argument("--closed-test", action="store_true",
+                   help="instead: closed-set listening (commands) on TORGO's short words; use --set torgo-all")
+    p.add_argument("--closed-summary", type=Path, default=None,
+                   help="instead: the closed-set numbers again from saved rows (no GPU)")
     a = p.parse_args(argv)
     log = common.Log()
+    if a.closed_summary:
+        rows = [json.loads(line) for line in open(a.closed_summary, encoding="utf-8")]
+        common.save_json(a.closed_summary.with_suffix(".summary.json"), closed_set_summary(rows, log))
+        return 0
     if a.cleanup:
         cleanup_compare(a.cleanup, a.text, log)
         return 0
@@ -492,8 +684,10 @@ def main(argv: list[str] | None = None) -> int:
     from engine.voice.whisper_import import faster_whisper
 
     model = faster_whisper().WhisperModel(resolve_model(a.model), device="cuda", compute_type="float16")
-    if a.hot_test or a.vad_test or a.variants or a.context_test:
-        if a.context_test:
+    if a.hot_test or a.vad_test or a.variants or a.context_test or a.closed_test:
+        if a.closed_test:
+            test, name = closed_set_test, "closed"
+        elif a.context_test:
             test, name = context_test, "context"
         elif a.variants:
             names = tuple(n.strip() for n in a.variants.split(",") if n.strip() in VARIANTS)
