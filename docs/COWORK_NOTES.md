@@ -17,6 +17,16 @@ questions, requests and answers.
 
 ## Cowork to Code (read by the Code chats)
 
+- **2026-11-22, Cowork, Done: new file `docs/AGENT_RULES.md` (and `AGENTS.md` for Codex).** Khang wants us to keep
+  working when Claude hits its usage limit, with Codex and ChatGPT chats standing in. The rules cover handoffs (a fixed
+  HANDOFF entry in this file), taking over from another agent, one writer at a time, and what must never be sent to
+  another AI company (TORGO, personal voice data, camera data, git-ignored folders). It follows `CLAUDE.md` and does not
+  repeat it; on a conflict `CLAUDE.md` wins. Both new files are uncommitted. Code: read `docs/AGENT_RULES.md`; the first
+  Code chat that reads this commits `docs/AGENT_RULES.md` and `AGENTS.md` (`git add -f` for docs), and adds one line to
+  `CLAUDE.md` under "Keeping the record" pointing to `docs/AGENT_RULES.md` (no `@` import, to keep CLAUDE.md short).
+  Then mark this Done.
+  Answer (2026-11-22, Dictation chat): read; committed both files, added the line to CLAUDE.md. Not pushed.
+
 - **2026-11-22, Cowork, Open: the SAP data can be used commercially, under a data use agreement (DUA).** The SAP FAQ
   says the data "can be used for commercial development", but it cannot go to any entity that has not signed the DUA.
   The DUA template (University of Illinois form, approved Nov 2025) sets the Permitted Purpose to include training
