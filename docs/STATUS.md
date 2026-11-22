@@ -59,7 +59,8 @@ Last updated: 2026-11-22 10:50 (Dictation chat: own-voice adaptation measured, c
 ## In progress
 
 - Nothing from the clean-up model chat (no GPU job; 2026-11-22 10:53, 2.9 GB of the GPU was in use by something else).
-- Dictation chat: Khang is trying the whole app (desktop app, `scriptsun_demo.ps1` in a terminal tab, no website; stock Whisper large-v3-turbo from 2026-11-22 (config.local.json's whisper-elder-ct2 line removed at Khang's OK) plus the trained clean-up big1, about 5.4 GB of the GPU). First run 2026-11-22: the mouth gate got no readings (every word marked "-"), one 2 s clip took 24 s in Whisper, and the fine-tuned Whisper garbled clear speech ("mouy cßmaras"). No other GPU job while it runs.
+- Dictation chat: Khang is trying the whole app (desktop app, `scripts
+un_demo.ps1` in a terminal tab, no website; stock Whisper large-v3-turbo from 2026-11-22 (config.local.json's whisper-elder-ct2 line removed at Khang's OK) plus the trained clean-up big1, about 5.4 GB of the GPU). First run 2026-11-22: the mouth gate got no readings (every word marked "-"), one 2 s clip took 24 s in Whisper, and the fine-tuned Whisper garbled clear speech ("mouy cßmaras"). No other GPU job while it runs.
 
 ## Next
 
@@ -89,7 +90,7 @@ Last updated: 2026-11-22 10:50 (Dictation chat: own-voice adaptation measured, c
 ## Uncommitted work on Khang's PC
 
 - `engine/capture/` and `tests/test_capture.py`: unreviewed draft, left untracked. Decide: delete, or keep on a separate branch.
-- Not pushed: 39 commits (the Dictation chat's 2026-11-19 to 2026-11-22 work and these records). Ask Khang before every push.
+- Pushed 2026-11-22: everything up to d95762e is on origin (`voice-cleanup-app`).
 - Disk, simulator (Dictation chat): `data/voice/simulated/` v1 clips (`train-clean-100/`, `dev-clean/` directly under it) and the converted test models `checkpoints/sim-*/ct2*` can be deleted, with Khang's OK. `data/voice/librispeech/train-clean-100/` (6.3 GB) too, once nobody needs to rerun the experiment.
 - Disk: each training run keeps about 20 GB (one epoch) or 40 GB (two) in `checkpoints/cleanup/<name>/`; its `merged*/` folders and bf16 GGUFs can be rebuilt with export.py and deleted. D: had 771 GB free on 2026-11-06.
 - Git-ignored, only on this PC: training data (`data/cleanup_train/`: big1, big2, big3, big3s, the frozen test and its watch file), adapters and GGUF files (`checkpoints/cleanup/`; `merged/` and bf16 GGUFs can be rebuilt with export.py; `smoke3/` is a 3-step test and can go), llama.cpp (`downloads/llama.cpp/b11960/`).
