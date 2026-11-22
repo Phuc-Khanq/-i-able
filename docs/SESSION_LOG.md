@@ -1,5 +1,20 @@
 # Session log (newest first)
 
+## 2026-11-22 [Face-gesture]: Survey of face-gesture variables (deliverable 1 of the face-gesture layer)
+Branch: `eyes-face-gestures` in the worktree `D:\CODING PROJ\Diseyeble-face` (Khang chose a new branch in this repo); the records are on `voice-cleanup-app` in the main folder.
+**Done:**
+- Wrote `docs/plans/face_behaviours_survey.md`: SensePilot's variables (name, what it does, range, step, default, what it interacts with, where seen), Project Gameface's Windows and Android settings with their code defaults, ChromeOS Face control's settings, MediaPipe Face Landmarker's outputs and weak blendshapes, and what `engine/eyes` already does.
+- SensePilot only from public material: its setup manual PDF (2026-04-15), two of its YouTube videos (transcripts), FAQ, the Can I Play That? preview and a reseller page. Nothing installed, unpacked or copied.
+- Gameface cloned shallowly into the scratchpad to read its code (not in the repo).
+- Licences recorded in DECISIONS (2026-11-22).
+**Measured:** nothing. All numbers are from the sources.
+**Decisions:** licences for the face-gesture layer (DECISIONS 2026-11-22).
+**Still running:** nothing.
+**Problems / blockers:** Khoi's `iable_eye` isn't on this PC or in any branch. MediaPipe's tongueOut is missing from its output, and cheekPuff, jaw left/right and dimples are reported near 0 by others: tongue out and cheek puff need our own measurement before they're offered.
+**Next:** Khang's OK on the survey, then deliverable 2 (design doc: parameters, defaults, reasons).
+**Khang must do by hand:** read the survey; say where `iable_eye` is; decide whether to run the SensePilot trial (checklist at the end of the survey) after Cowork checks its terms.
+**For Cowork:** SensePilot's terms for a trial used to study a competitor; patents on gesture-to-key mapping (COWORK_NOTES).
+
 ## 2026-11-22 11:50 [Dictation]: The whole app on Khang's PC; blink only clicks, text only into a text box, patient pause
 Branch: voice-cleanup-app · Commits: this entry's commit and the ones before it today
 **Done:**

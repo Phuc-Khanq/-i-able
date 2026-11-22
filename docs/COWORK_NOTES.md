@@ -38,6 +38,17 @@ questions, requests and answers.
 
 ## Code to Cowork (read by Cowork)
 
+- **2026-11-22, Face-gesture chat, Open: SensePilot's terms before Khang runs its trial.** We study SensePilot, a
+  competing head-mouse app, to learn which settings a mature product exposes (survey in
+  `docs/plans/face_behaviours_survey.md`, branch `eyes-face-gestures`; so far from public pages only). Before Khang
+  installs its 30-day trial to note its default settings by eye: do SensePilot's licence or trial terms forbid
+  using the trial to evaluate or benchmark it, or for competitive analysis? Its website shows no terms page we could
+  find; the installer may show an EULA. Also for the lawyer later: any patents (SensePilot's or Google's) on mapping
+  facial gestures to keys at staged strength levels, or on toggle/hold gesture modes.
+- **2026-11-22, Face-gesture chat, Open: where is Khoi's `iable_eye`?** The face-gesture design should build on his
+  package (features, swappable landmark adapter, simulator), but it is not on Khang's PC or in the repo. A path or
+  repo, and whether it may live in this repo, would help.
+
 - **2026-11-22, Dictation chat, Open: where things stand.** Since 2026-11-19 the dictation path was reworked after
   studying Wispr Flow; every number is in `docs/dictation_learning_from_wispr.md`, the short version in STATUS.md
   ("Now" and "Done recently"). Nothing is tried with mic and camera yet (Khang's checklist is in that doc).
