@@ -38,7 +38,7 @@ from iable_eye.app_state import AppState, GatedOutput  # noqa: E402
 from iable_eye.capture import ReplayTracker  # noqa: E402
 from iable_eye.demo_record import DemoRecorder  # noqa: E402
 from iable_eye.fusion import FusionConfig  # noqa: E402
-from iable_eye.live_demo import DEMO_POINTER, GAZE_TAU_S, Calibration, ClickTest, DemoConfig, DemoLoop, ReachTest  # noqa: E402
+from iable_eye.live_demo import CURSOR_SMOOTH_HZ, DEMO_POINTER, GAZE_TAU_S, Calibration, ClickTest, DemoConfig, DemoLoop, ReachTest  # noqa: E402
 from iable_eye.recal import RecalError  # noqa: E402
 from iable_eye.one_euro import OneEuroConfig  # noqa: E402
 from iable_eye.model_store import ModelStoreError, load_candidate, model_path  # noqa: E402
@@ -444,6 +444,8 @@ def _parser():
                     help="One Euro min cutoff in Hz: lower = steadier but more lag (try 0.5)")
     ap.add_argument("--gaze-smooth", type=float, default=GAZE_TAU_S,
                     help="fusion: gaze smoothing time constant in seconds (0 = off, 0.3 default; higher = steadier, slower)")
+    ap.add_argument("--cursor-smooth", type=float, default=CURSOR_SMOOTH_HZ,
+                    help="light smoothing of the cursor position in Hz (0 = off; lower = steadier, a bit more lag)")
     ap.add_argument("--jump-scale", type=float, default=3.0,
                     help="fusion: gaze may only jump the cursor when it is far away; the 110 x 140 px "
                          "ellipse is multiplied by this (3 = jump beyond about 500 px; 1 = old behaviour)")
@@ -481,7 +483,8 @@ def main(argv=None) -> int:
                           sign_x=a.sign_x, sign_y=a.sign_y,
                           filter=OneEuroConfig(min_cutoff_hz=a.smooth, beta=DEMO_POINTER.filter.beta))
         fus = FusionConfig(a_px=FusionConfig().a_px * a.jump_scale, b_px=FusionConfig().b_px * a.jump_scale)
-        cfg = DemoConfig(mode=a.mode, click=click, pointer=pointer, fusion=fus, gaze_tau_s=a.gaze_smooth)
+        cfg = DemoConfig(mode=a.mode, click=click, pointer=pointer, fusion=fus, gaze_tau_s=a.gaze_smooth,
+                         cursor_smooth_hz=a.cursor_smooth)
     except ValueError as e:
         print(f"REFUSED: {e}")
         return 2
@@ -592,7 +595,7 @@ def main(argv=None) -> int:
         print(f"recorded: {rpath} ({len(rec.obs)} frames, {len(rec.labels)} labels; numbers only)")
     obj = {"person": a.person, "mode": a.mode, "test": a.test, "click": click, "fake": bool(a.fake),
            "source": a.source, "screen": [w, h], "dpi": dpi, "gain_px_per_deg": [a.gain_slow, a.gain_fast],
-           "smooth_hz": a.smooth, "signs": [a.sign_x, a.sign_y], "jump_scale": a.jump_scale, "gaze_smooth_s": a.gaze_smooth,
+           "smooth_hz": a.smooth, "signs": [a.sign_x, a.sign_y], "jump_scale": a.jump_scale, "gaze_smooth_s": a.gaze_smooth, "cursor_smooth_hz": a.cursor_smooth,
            "os_cursor": bool(a.os_cursor), "stop": reason, "stats": s, "result": res,
            "dropped_while_paused": out.dropped, "demo_version": 2, "calibration": calib_used}
     path = results_path(a.person, a.mode, a.test, root_d, stamp)

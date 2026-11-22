@@ -56,7 +56,7 @@ def ready_state():
 # ---------------------------------------------------------------- the loop
 def test_l1_head_mode_equals_hand_chain(obs_list):
     gate, hp = StreamGate(REAL_GATE_V1), HeadPointer(W, H, DEMO_POINTER)
-    loop = DemoLoop(W, H, DemoConfig())
+    loop = DemoLoop(W, H, DemoConfig(cursor_smooth_hz=0.0))
     n_blink_moves = 0
     for o in obs_list:
         code, f = gate.step(o)
@@ -71,7 +71,7 @@ def test_l1_head_mode_equals_hand_chain(obs_list):
 def test_l2_fusion_mode_equals_hand_chain(obs_list, model):
     gate = StreamGate(REAL_GATE_V1)
     fp = FusionPointer(W, H, pointer_config=DEMO_POINTER)
-    loop = DemoLoop(W, H, DemoConfig(mode="fusion", gaze_tau_s=0.0), model=model)
+    loop = DemoLoop(W, H, DemoConfig(mode="fusion", gaze_tau_s=0.0, cursor_smooth_hz=0.0), model=model)
     for o in obs_list:
         code, f = gate.step(o)
         ok = code in HEAD_CODES
@@ -296,3 +296,55 @@ def test_l8_gain_speed_smoothing_is_opt_in_and_steadier():
     g0 = gains(replace(DEMO_POINTER, gain_speed_tau_s=0.0))
     g1 = gains(DEMO_POINTER)
     assert g1.std() < 0.5 * g0.std()
+
+
+def test_l9_cursor_smoothing_constants_are_steadier_and_a_still_cursor_is_untouched(obs_list):
+    from iable_eye.live_demo import CURSOR_SMOOTH_BETA, CURSOR_SMOOTH_HZ
+    from iable_eye.one_euro import OneEuro, OneEuroConfig
+    off = DemoLoop(W, H, DemoConfig(cursor_smooth_hz=0.0))
+    on = DemoLoop(W, H, DemoConfig())
+    for o in obs_list[:60]:                                          # still head: the two cursors are identical
+        a, b = off.step(o), on.step(o)
+        assert (a.x_px, a.y_px) == pytest.approx((b.x_px, b.y_px), abs=1e-6)
+    rng = np.random.default_rng(4)
+    t = np.arange(300) / 30.0
+    raw = np.column_stack([300 + 150 * t, 500 + 0 * t]) + rng.normal(0, 1.5, (300, 2))   # slow move + jitter
+    f = OneEuro(OneEuroConfig(min_cutoff_hz=CURSOR_SMOOTH_HZ, beta=CURSOR_SMOOTH_BETA), dim=2)
+    sm = np.array([f.step(float(ti), list(r)) for ti, r in zip(t, raw)])
+    d2 = lambda a: np.abs(np.diff(a, 2, axis=0)).mean()
+    assert d2(sm) < 0.6 * d2(raw)
+    assert np.abs(sm[30:] - raw[30:]).max() < 15.0                  # lag stays small (150 px/s ramp)
+    with pytest.raises(DemoError, match="cursor_smooth_hz"):
+        DemoConfig(cursor_smooth_hz=-1.0)
+
+
+def test_l10_smoothing_passes_a_jump_fast():
+    from iable_eye.one_euro import OneEuro, OneEuroConfig
+    f = OneEuro(OneEuroConfig(min_cutoff_hz=3.0, beta=0.01), dim=2)
+    for k in range(30):
+        f.step(k / 30.0, [100.0, 100.0])
+    v = f.step(30 / 30.0, [1500.0, 900.0])                          # a fusion jump of about 1.6 k px
+    assert v[0] > 0.9 * 1500 - 0.1 * 100 and v[1] > 0.85 * 900 - 100
+
+
+def test_l11_loop_smooths_the_output_position(obs_list):
+    """Wiring: the position the loop returns (shown, clicked, sent) is the smoothed one."""
+    import types
+    rng = np.random.default_rng(5)
+    n = 150
+    raw = np.column_stack([300 + 150 * np.arange(n) / 30.0, 500 + 0 * np.arange(n)]) + rng.normal(0, 1.5, (n, 2))
+
+    class Stub:
+        def __init__(self): self.i = 0
+        def step(self, t, yaw, pitch, ok):
+            r = raw[self.i]; self.i += 1
+            return types.SimpleNamespace(x_px=float(r[0]), y_px=float(r[1]), status="move")
+
+    out = {}
+    for hz in (0.0, 3.0):
+        loop = DemoLoop(W, H, DemoConfig(cursor_smooth_hz=hz))
+        loop._ptr = Stub()
+        out[hz] = np.array([(s.x_px, s.y_px) for s in (loop.step(o) for o in obs_list[:n])])
+    assert np.array_equal(out[0.0], raw)
+    d2 = lambda a: np.abs(np.diff(a, 2, axis=0)).mean()
+    assert d2(out[3.0]) < 0.6 * d2(raw)

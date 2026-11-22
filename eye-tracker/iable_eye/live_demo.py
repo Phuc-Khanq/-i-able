@@ -25,7 +25,7 @@ from iable_eye.click import ClickConfig, ClickRouter
 from iable_eye.features import DEFAULT_FOCAL_PX
 from iable_eye.fusion import FusionConfig, FusionPointer
 from iable_eye.head_pointer import REST_GATE_V2, HeadPointer, PointerConfig
-from iable_eye.one_euro import OneEuroConfig
+from iable_eye.one_euro import OneEuro, OneEuroConfig
 from iable_eye.quality import BLINK, OK, POSE, REAL_GATE_V1, SMALL, GateConfig
 from iable_eye.recal import fit_dot_recal
 from iable_eye.stream_gate import StreamGate
@@ -42,6 +42,10 @@ _YAW, _PITCH = 8, 9  # FEATURE_NAMES indexes
 # now the speed that picks the gain is smoothed (tau 0.3 s): slow-move wobble -26 %, no added lag (recorded runs).
 DEMO_POINTER = replace(REST_GATE_V2, sign_x=-1.0, sign_y=1.0, gain_speed_tau_s=0.3,
                        filter=OneEuroConfig(min_cutoff_hz=0.6, beta=0.05))
+# S066: a light One Euro filter on the cursor POSITION (output only; the pointer state is untouched): slow-move
+# wobble 3.45 -> 2.62 px/frame^2 (-24 %), +6 ms lag on the recorded runs; its cutoff grows with speed, so a
+# fusion jump passes within a frame.
+CURSOR_SMOOTH_HZ, CURSOR_SMOOTH_BETA = 3.0, 0.01
 GAZE_TAU_S = 0.3   # S065: gaze EMA time constant in fusion mode (0 = off); per-frame gaze jitter was about 100 px
 
 
@@ -63,12 +67,16 @@ class DemoConfig:
     click_config: ClickConfig = ClickConfig()
     focal_px: float = DEFAULT_FOCAL_PX
     gaze_tau_s: float = GAZE_TAU_S
+    cursor_smooth_hz: float = CURSOR_SMOOTH_HZ     # 0 = off
 
     def __post_init__(self):
         if self.mode not in MODES:
             raise DemoError("config", f"mode must be one of {MODES}, got {self.mode!r}")
         if not (isinstance(self.gaze_tau_s, (int, float)) and math.isfinite(self.gaze_tau_s) and self.gaze_tau_s >= 0):
             raise DemoError("config", "gaze_tau_s must be a finite number >= 0")
+        if not (isinstance(self.cursor_smooth_hz, (int, float)) and math.isfinite(self.cursor_smooth_hz)
+                and self.cursor_smooth_hz >= 0):
+            raise DemoError("config", "cursor_smooth_hz must be a finite number >= 0")
         if self.click not in CLICKS:
             raise DemoError("config", f"click must be one of {CLICKS}, got {self.click!r}")
         if not isinstance(self.pointer, PointerConfig) or self.pointer.rest_window_s == 0:
@@ -122,6 +130,8 @@ class DemoLoop:
             self._ptr = FusionPointer(self.w, self.h, config=c.fusion, pointer_config=c.pointer, start_xy=xy)
         self._clicker = ClickRouter(c.click, c.click_config)
         self._g_ema = None
+        self._cur_f = (OneEuro(OneEuroConfig(min_cutoff_hz=c.cursor_smooth_hz, beta=CURSOR_SMOOTH_BETA), dim=2)
+                       if c.cursor_smooth_hz > 0 else None)
 
     def recenter(self) -> None:
         """Put the cursor at the screen centre and start the pointer and clicker fresh (key c)."""
@@ -187,6 +197,8 @@ class DemoLoop:
             gaze = (gx, gy) if code == OK and math.isfinite(gx) else None
             f = self._ptr.step(t, yaw, pitch, head_ok, gaze)
             x, y, status, jumped = f.x_px, f.y_px, f.status, f.jumped
+        if self._cur_f is not None:                    # smooth what is shown, clicked and sent
+            x, y = (float(v) for v in self._cur_f.step(t, [x, y]))
         ev = self._clicker.step(t, x, y, math.nan, math.nan, bool(key_down))
         prog = self._clicker.chosen.progress if self.cfg.click == "dwell" else 0.0
         step = DemoStep(t, int(code), head_ok, gx, gy, x, y, status, jumped, ev, prog, False)
