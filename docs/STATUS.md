@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-22 10:50 (Dictation chat: own-voice adaptation measured, command-rescue and end-of-turn probes; records are now updated after every finished piece of work, no /wrap-up. Clean-up chat's last update: 2026-11-22 13:00 (short-phrase rule in check_cleanup). GPU: 2.9 GB in use at 10:53, not ours). Session-by-session record: `docs/SESSION_LOG.md`. Questions between Cowork and the Code chats: `docs/COWORK_NOTES.md`.
+Last updated: 2026-11-22 11:50 (Dictation chat: blink only clicks, text only into a text box, 2.5 s pause and patient card; app tried on Khang's PC; everything pushed until 11:20). Session-by-session record: `docs/SESSION_LOG.md`. Questions between Cowork and the Code chats: `docs/COWORK_NOTES.md`.
 
 ## Now
 
@@ -9,6 +9,7 @@ Last updated: 2026-11-22 10:50 (Dictation chat: own-voice adaptation measured, c
 - **Whisper for dysarthric speech:** a simulator of dysarthric speech made Whisper worse on real dysarthric speech, so it is stopped (DECISIONS 2026-11-12). Next is real recordings: the Speech Accessibility Project proposal (Claude Doc https://claude.ai/artifact/SdxuomVgQfoY3paCui9Bzv, blanks for Khang) and consented users.
 - **Fixing dictation by voice:** "change X to Y", "spell H A T H A W A Y" and a personal word list ("add <word> to my words", used as Whisper hotwords) are built and pass the tests; not yet tried with the mic.
 - **Learning from Wispr Flow (Dictation chat, 2026-11-19, Khang's autopilot):** research and every number in `docs/dictation_learning_from_wispr.md`. On TORGO's held-out dysarthric speakers the app's Whisper pass goes from 43.1% to 41.5% of words wrong (no random re-decoding when unsure), and to 39.9% for what reaches a dictation card (short unsure words kept when the camera saw the user say them); clear speech unchanged. Also built: learning from fixes, snippets by voice, spoken punctuation, Whisper's other hearings to the clean-up. All tested with unit tests only, not yet with the mic. Proposed: a 2.5 s pause for users who pause mid-sentence (DECISIONS, Proposed).
+- **The dictation card (Khang, 2026-11-22):** a blink only clicks, never types the card; "yes" types only into a text box, otherwise the card asks the user to click one first; the pause is 2.5 s and the card waits however long the user is quiet (DECISIONS 2026-11-22). Unit tests only, not yet with mic and camera. The website still describes the old behaviour.
 - **Rename:** a new name is coming (close to the new repo name `-i-able`, not final). The old-name scan is done; changes wait for the exact name.
 - **Head tracking:** paused until Khoi's open-source tracker research is in.
 
@@ -59,7 +60,7 @@ Last updated: 2026-11-22 10:50 (Dictation chat: own-voice adaptation measured, c
 ## In progress
 
 - Nothing from the clean-up model chat (no GPU job; 2026-11-22 10:53, 2.9 GB of the GPU was in use by something else).
-- Dictation chat: Khang is trying the whole app (desktop app, `scripts
+- Nothing running from the Dictation chat (the app was stopped for the 2026-11-22 changes; start it with `.\scriptsun_demo.ps1`).
 un_demo.ps1` in a terminal tab, no website; stock Whisper large-v3-turbo from 2026-11-22 (config.local.json's whisper-elder-ct2 line removed at Khang's OK) plus the trained clean-up big1, about 5.4 GB of the GPU). First run 2026-11-22: the mouth gate got no readings (every word marked "-"), one 2 s clip took 24 s in Whisper, and the fine-tuned Whisper garbled clear speech ("mouy cßmaras"). No other GPU job while it runs.
 
 ## Next

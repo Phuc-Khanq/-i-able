@@ -1,5 +1,20 @@
 # Session log (newest first)
 
+## 2026-11-22 11:50 [Dictation]: The whole app on Khang's PC; blink only clicks, text only into a text box, patient pause
+Branch: voice-cleanup-app · Commits: this entry's commit and the ones before it today
+**Done:**
+- Ran the whole app on Khang's PC as the desktop program (`scripts\run_demo.ps1`): head pointer, gestures, voice, the new dictation and the trained clean-up (big1, llama-server). Switched the PC to stock Whisper (removed `whisper_model` from config.local.json): the old hackathon model garbled clear speech.
+- Pushed everything to origin (`voice-cleanup-app`, 50 commits, all under Khang's name).
+- Khang's three changes (DECISIONS 2026-11-22): a blink never types the card, only clicks; "yes" types only into a text box, else the card asks for a click on one and types after it; pause 2.5 s by default and a one-time "still on the card" reminder after 60 s of quiet. New `engine/eyes/text_focus.py`, changes in `mode_manager.py`, `config.py` (shared; the clean-up chat was told), `main.py`, the card hint, the help list.
+**Measured:** none new. Unit tests: 1,269 pass (10 new in `tests/test_card_placement.py`; one old test that expected a blink to type the card now expects a click). The text-box check answered True with the focus in a terminal on this PC.
+**Decisions:** DECISIONS 2026-11-22 (the card: blink, text box, patience).
+**Still running:** the app is not running now (restart it with `.\scripts\run_demo.ps1`).
+**Problems / blockers:** first run showed the mouth gate getting no readings (every word "-") and one 24 s Whisper call; not looked into yet. The website still says a blink types the card and "pause up to 4 s" (website copy, `ui` route).
+**Next:** Khang tries the three changes with mic and camera: dictate, say "yes" with no text box picked, blink on a text box; check a blink no longer types; speak slowly with long pauses.
+**Khang must do by hand:** the try above.
+**For Cowork:** none.
+**Notes from Khang:** "I don't want the fact that blinking is going to drop the line ... ask them to use the cursor to move to the text box ... between noises, as long as it's not more than 1 minute, then continue to listen."
+
 ## 2026-11-22 11:00 [Clean-up model]: New record-keeping rule taken in; the two over-editing findings checked
 Branch: voice-cleanup-app · Commits: see `git log` (this entry's files are committed with it)
 **Done:**
