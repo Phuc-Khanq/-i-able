@@ -10,14 +10,20 @@ Branch: voice-cleanup-app · Commits: see `git log` (this entry's files are comm
 - LibriSpeech dev, 298 clear sentences, 6,191 words: words wrong 1.50% before the clean-up, 3.28% after (3.21% with hearings). 83 sentences changed: 63 got more word errors, 7 fewer. 44 of the 83 were marked unsure, 39 were not.
 - Khang's 29 recorded phrases, 240 words: 10.0% before, 13.33% after (11.67% with hearings). 8 changed: 6 worse, 2 better; 6 of the 8 not marked unsure. "Refresh." -> "Please refresh the page." is not marked unsure.
 - The Dictation chat counted 76 changed sentences, not 83: a slightly different word comparison. The direction is the same.
-**Decisions:** none.
+- Then ran Next 5c's offline guard test (Khang said yes, 11:00): `eval/dictation_cleanup/guard_replay.py` (+ `tests/test_guard_replay.py`, 12 tests), review `eval/dictation_cleanup/reviews/2026-11-22_guard_replay.md`. It replays saved big1 answers through guard variants: dev 67, test 2,500, and Whisper rows (LibriSpeech dev, Khang's 29 phrases, TORGO dev).
+**Measured (the guard test; Khang's PC, no GPU; big1 answers already collected):**
+- "No new content word, input up to 6 words": Khang's phrases 11.67% -> 10.00% words wrong (Whisper alone 10.00%): 2 phrases fixed, none worse. Dev, TORGO and LibriSpeech unchanged. Test: 6 more answers blocked, 1 more equal to what was meant, 8 right answers lost either way, clean controls changed 4 -> 3.
+- Same rule on any length: blocks 104 test answers, loses 53 right ones. Dropped-run of 3 / 2 content words: loses 44 / 268 right ones, for 1 / 8 better LibriSpeech rows.
+- LibriSpeech with hearings: 114 word edits, 112 in sentences with no filler or repeat; 54 swap a content word (many spelling variants the reference counts wrong), 18 add and 16 drop a small word, 14 swap a small word, 12 drop content words. Not guardable from the text alone.
+- 1,252 tests pass, compile check clean.
+**Decisions:** none made. Proposed (DECISIONS, Proposed): the short-phrase rule in `check_cleanup`.
 **Still running:** nothing. At 10:53 the GPU had 2.9 GB in use at 10%, not from this chat.
 **Problems / blockers:** the clean-up changes clear and short text, and the guard lets the added words through. This is the same kind of over-editing as the `drop_small_words` finding of 2026-11-05.
 **Next:**
-1. Khang's OK on Next 5c: offline guard variants on the existing answers (no GPU), scored on these rows plus dev and the 2,500 test to catch harm.
-2. If the model itself over-edits: more clear and short phrases in its data (Hung's phrases will help), then a one-epoch run.
+1. Khang's OK to add the short-phrase rule to the shared `rewrite.py` (then message the Dictation chat, add tests, recheck on Hung's hidden phrases).
+2. If the over-editing of clear text matters: more clear and short phrases in the model's data (Hung's phrases will help), then a one-epoch run; or Whisper's word confidence in the rewrite request (contract change).
 3. Hung's 35 hidden-test phrases, when they arrive.
-**Khang must do by hand:** say yes or no to Next 5c; the other items from 2026-11-12 are still open (share Hung's doc, candidate yes or no, mic try-out of "Check this", push).
+**Khang must do by hand:** yes or no to the short-phrase rule in `rewrite.py`; the other items from 2026-11-12 are still open (share Hung's doc, candidate yes or no, mic try-out of "Check this", push).
 **For Cowork:** none.
 
 ## 2026-11-22 10:45 [Dictation]: Own-voice adaptation measured; command rescue and end-of-turn probes; records now kept as we go
