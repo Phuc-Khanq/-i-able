@@ -1,5 +1,18 @@
 # Session log (newest first)
 
+## 2026-11-22 [Face-gesture]: Design agreed; task list for the face-gesture layer (deliverable 3)
+Branch: `eyes-face-gestures` (worktree `D:\CODING PROJ\Diseyeble-face`); records on `voice-cleanup-app`.
+**Done:**
+- Khang accepted D1 to D9 ("Accept all, do tasks"); recorded in DECISIONS 2026-11-22.
+- Wrote `docs/plans/face_behaviours_tasks.md`: 25 tasks in phases 0 to 5, each with an owner, a "done when" test and a guessed effort, and the order they depend on.
+**Measured:** nothing.
+**Decisions:** the face-gesture layer as designed (D1 to D9).
+**Still running:** nothing.
+**Problems / blockers:** Khoi's `iable_eye` still unknown (task 0.1); phase 3 needs the Dictation chat for `mode_manager.py`.
+**Next:** Khang's OK, then phase 1 (signals, strength, sensitivity, trigger, modes, guards, simulator, profile file), all camera-free.
+**Khang must do by hand:** OK the task list; ask Khoi about `iable_eye` (0.1).
+**For Cowork:** none new.
+
 ## 2026-11-22 [Face-gesture]: Design of the face-gesture layer (deliverable 2)
 Branch: `eyes-face-gestures` (worktree `D:\CODING PROJ\Diseyeble-face`); records on `voice-cleanup-app`.
 **Done:**
